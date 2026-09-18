@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "minimals",
+  "version": "0.2.0",
+  "name": "Minimals",
+  "description": "Lightweight client-side HUD and UI mod (non-cheat).",
+  "authors": ["you"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.minimals.client.MinimalClientMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric": "*",
+    "minecraft": "26.2"
+  }
+}
