@@ -58,6 +58,22 @@ public abstract class HudElement {
         this.yFrac = clampFrac(y / screenHeight);
     }
 
+    public float getXFrac() {
+        return xFrac;
+    }
+
+    public float getYFrac() {
+        return yFrac;
+    }
+
+    public void setXFrac(float value) {
+        this.xFrac = clampFrac(value);
+    }
+
+    public void setYFrac(float value) {
+        this.yFrac = clampFrac(value);
+    }
+
     private static float clampFrac(float value) {
         return Math.max(0f, Math.min(1f, value));
     }

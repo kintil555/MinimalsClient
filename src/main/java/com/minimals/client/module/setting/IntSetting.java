@@ -41,6 +41,21 @@ public class IntSetting extends Setting<Integer> {
     }
 
     @Override
+    public String serialize() {
+        return Integer.toString(get());
+    }
+
+    @Override
+    public boolean deserialize(String text) {
+        try {
+            set(Integer.parseInt(text.trim()));   // set() clamps to [min, max]
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    @Override
     public String getDisplayValue() {
         return unit.isEmpty() ? Integer.toString(get()) : get() + " " + unit;
     }

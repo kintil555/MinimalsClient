@@ -27,6 +27,22 @@ public class EnumSetting<E extends Enum<E> & EnumSetting.Labeled> extends Settin
     }
 
     @Override
+    public String serialize() {
+        return get().name();
+    }
+
+    @Override
+    public boolean deserialize(String text) {
+        for (E option : options) {
+            if (option.name().equals(text)) {
+                set(option);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public String getDisplayValue() {
         return get().label();
     }

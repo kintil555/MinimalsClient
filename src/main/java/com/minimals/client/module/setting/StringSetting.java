@@ -21,6 +21,18 @@ public class StringSetting extends Setting<String> {
     }
 
     @Override
+    public String serialize() {
+        // Config lines are single-line; strip anything that would break the format.
+        return get().replace("\n", "").replace("\r", "");
+    }
+
+    @Override
+    public boolean deserialize(String text) {
+        set(text);
+        return true;
+    }
+
+    @Override
     public String getDisplayValue() {
         return get().isEmpty() ? "(real name)" : get();
     }

@@ -67,6 +67,25 @@ public class ColorSetting extends Setting<Integer> {
     }
 
     @Override
+    public String serialize() {
+        return String.format("%06X", get() & 0xFFFFFF);
+    }
+
+    @Override
+    public boolean deserialize(String text) {
+        String hex = text.startsWith("#") ? text.substring(1) : text;
+        if (hex.length() != 6) {
+            return false;
+        }
+        try {
+            set(Integer.parseInt(hex, 16) | 0xFF000000);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    @Override
     public String getDisplayValue() {
         return String.format("#%06X", get() & 0xFFFFFF);
     }

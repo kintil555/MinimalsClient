@@ -37,6 +37,15 @@ public abstract class Setting<T> {
      */
     public abstract String getDisplayValue();
 
+    /** Value as saved in a config file (single line, no newlines). */
+    public abstract String serialize();
+
+    /**
+     * Restores a value written by {@link #serialize()}. Returns false (leaving the value
+     * untouched) when the text is malformed, so a hand-edited config can never crash the game.
+     */
+    public abstract boolean deserialize(String text);
+
     /**
      * Clamp / validate an incoming value. Default: accept as-is.
      */

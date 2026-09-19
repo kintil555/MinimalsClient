@@ -9,6 +9,7 @@ import com.minimals.client.ui.Animation;
 import com.minimals.client.ui.CategoryTabWidget;
 import com.minimals.client.ui.ColorWheelRowWidget;
 import com.minimals.client.ui.GearButtonWidget;
+import com.minimals.client.ui.InfoRowWidget;
 import com.minimals.client.ui.KeybindRowWidget;
 import com.minimals.client.ui.ModuleRowWidget;
 import com.minimals.client.ui.SettingRowWidget;
@@ -48,6 +49,11 @@ public class MenuScreen extends Screen {
     private static final int GEAR_SIZE = 22;
 
     private static Module.Category activeCategory = Module.Category.COMBAT;
+
+    /** Name typed in the Config row; Save/Load act on it. Survives reopening the menu. */
+    private static final StringSetting CONFIG_NAME = new StringSetting("Config", ConfigManager.DEFAULT_NAME, 24);
+    /** One-line result of the last Save/Load, shown under the buttons. */
+    private static String configStatus = "";
 
     /** True while the global settings page replaces the module list. Survives reopening. */
     private static boolean settingsOpen = false;
@@ -207,6 +213,33 @@ public class MenuScreen extends Screen {
             }
             y += SETTING_ROW_H + ROW_GAP;
         }
+        // Config: named files in <config dir>/minimals/, one file per config so it can be shared.
+        track(new TextFieldRowWidget(contentX, y, contentW, SETTING_ROW_H, CONFIG_NAME, "default"));
+        y += SETTING_ROW_H + ROW_GAP;
+
+        int half = (contentW - ROW_GAP) / 2;
+        Button saveBtn = Button.builder(Component.literal("Save Config"), btn -> {
+            String name = ConfigManager.sanitize(CONFIG_NAME.get());
+            configStatus = ConfigManager.save(name) ? "Saved '" + name + "'" : "Could not save '" + name + "'";
+        }).bounds(contentX, y, half, SETTING_ROW_H).build();
+        track(saveBtn);
+        Button loadBtn = Button.builder(Component.literal("Load Config"), btn -> {
+            String name = ConfigManager.sanitize(CONFIG_NAME.get());
+            configStatus = ConfigManager.load(name) ? "Loaded '" + name + "'" : "No config named '" + name + "'";
+            rebuildContent();
+        }).bounds(contentX + half + ROW_GAP, y, contentW - half - ROW_GAP, SETTING_ROW_H).build();
+        track(loadBtn);
+        y += SETTING_ROW_H + ROW_GAP;
+
+        String available = String.join(", ", ConfigManager.list());
+        String info = configStatus.isEmpty() ? "Files: config/minimals/" : configStatus;
+        track(new InfoRowWidget(contentX, y, contentW, SETTING_ROW_H, info));
+        y += SETTING_ROW_H + ROW_GAP;
+        if (!available.isEmpty()) {
+            track(new InfoRowWidget(contentX, y, contentW, SETTING_ROW_H, "Available: " + available));
+            y += SETTING_ROW_H + ROW_GAP;
+        }
+
         // HUD Editor button
         Button hudEditorBtn = Button.builder(
                 Component.literal("Open HUD Editor"),
@@ -340,6 +373,7 @@ public class MenuScreen extends Screen {
     @Override
     public void removed() {
         UiRenderer.setFade(1f);
+        ConfigManager.autoSave();
         super.removed();
     }
 

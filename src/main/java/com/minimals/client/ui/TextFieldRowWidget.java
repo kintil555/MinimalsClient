@@ -19,10 +19,16 @@ import net.minecraft.util.Util;
 public class TextFieldRowWidget extends Button {
 
     private final StringSetting setting;
+    private final String placeholder;
 
     public TextFieldRowWidget(int x, int y, int width, int height, StringSetting setting) {
+        this(x, y, width, height, setting, "(real name)");
+    }
+
+    public TextFieldRowWidget(int x, int y, int width, int height, StringSetting setting, String placeholder) {
         super(x, y, width, height, Component.literal(setting.getName()), btn -> { }, DEFAULT_NARRATION);
         this.setting = setting;
+        this.placeholder = placeholder;
     }
 
     @Override
@@ -83,7 +89,7 @@ public class TextFieldRowWidget extends Button {
         String shown = setting.get();
         boolean caretOn = focused && (Util.getMillis() / 500) % 2 == 0;
         if (shown.isEmpty() && !focused) {
-            shown = "(real name)";
+            shown = placeholder;
         } else if (caretOn) {
             shown = shown + "_";
         }

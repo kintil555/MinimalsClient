@@ -64,6 +64,9 @@ public class MinimalClientMod implements ClientModInitializer {
         HudRegistry.register(new ArraylistElement());
         HudRegistry.register(new KeystrokeElement());
 
+        // Restore the last session's settings (no-op on first run: default.txt does not exist yet).
+        ConfigManager.load(ConfigManager.DEFAULT_NAME);
+
         HudElementRegistry.attachElementAfter(
                 VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath(MOD_ID, "minimals_hud"),
