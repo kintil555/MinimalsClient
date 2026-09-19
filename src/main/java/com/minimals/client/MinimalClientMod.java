@@ -156,6 +156,9 @@ public class MinimalClientMod implements ClientModInitializer {
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         if (!hudVisible) return;
+        // While the HUD editor is open it draws every element itself (smoothly, following the
+        // cursor). Drawing them here too would show a second, laggier copy underneath.
+        if (Minecraft.getInstance().gui.screen() instanceof HudEditorScreen) return;
         for (HudElement element : HudRegistry.all()) {
             if (element.isActive()) {
                 element.render(graphics, deltaTracker, element.getX(graphics.guiWidth()), element.getY(graphics.guiHeight()));
