@@ -8,7 +8,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.world.phys.Vec3;
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -18,21 +17,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Particle culling: torch smoke, lava drips and portal particles behind walls still build quads
  * every frame in vanilla. Distance check first (cheap), raycast only for what survives it.
+ *
+ * level/x/y/z are declared in Particle (parent class). Without a refMap the Mixin processor
+ * cannot resolve inherited fields by name, so we shadow them with remap=false so Mixin skips
+ * the remapping step and uses the mojmap name directly.
  */
 @Mixin(SingleQuadParticle.class)
 public abstract class ParticleCullingMixin {
 
-    @Shadow
-    @Final
+    @Shadow(remap = false)
     protected ClientLevel level;
 
-    @Shadow
+    @Shadow(remap = false)
     protected double x;
 
-    @Shadow
+    @Shadow(remap = false)
     protected double y;
 
-    @Shadow
+    @Shadow(remap = false)
     protected double z;
 
     @Inject(method = "extract", at = @At("HEAD"), cancellable = true)
@@ -63,3 +65,5 @@ public abstract class ParticleCullingMixin {
         }
     }
 }
+
+
