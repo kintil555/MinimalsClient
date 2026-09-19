@@ -2,7 +2,6 @@ package com.minimals.client.ui;
 
 import com.minimals.client.module.Module;
 import com.mojang.blaze3d.platform.InputConstants;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.input.InputWithModifiers;
@@ -73,12 +72,11 @@ public class KeybindRowWidget extends Button {
             UiRenderer.roundedRect(graphics, getX(), getY(), getX() + w, getY() + h, 5, UiRenderer.ROW_BG_HOVER);
         }
 
-        var font = Minecraft.getInstance().font;
         int textY = getY() + (h - 8) / 2;
-        graphics.text(font, "Keybind", getX() + 10, textY, UiRenderer.TEXT_SECONDARY, false);
+        UiRenderer.text(graphics, "Keybind", getX() + 10, textY, UiRenderer.TEXT_SECONDARY);
 
         String label = keyLabel();
         int color = listening ? UiRenderer.ACCENT : UiRenderer.TEXT_PRIMARY;
-        graphics.text(font, label, getX() + w - font.width(label) - 10, textY, color, false);
+        UiRenderer.text(graphics, label, getX() + w - UiRenderer.textWidth(label) - 10, textY, color);
     }
 }

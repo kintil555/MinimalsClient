@@ -58,6 +58,12 @@ public class MinimalClientMod implements ClientModInitializer {
         );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (MenuScreen.isTypingInMenu()) {
+                // Drain queued presses so they don't fire the moment the text field loses focus.
+                while (menuKey.consumeClick()) { }
+                while (hudToggleKey.consumeClick()) { }
+                return;
+            }
             while (menuKey.consumeClick()) {
                 if (client.gui.screen() == null) {
                     client.gui.setScreen(new MenuScreen());

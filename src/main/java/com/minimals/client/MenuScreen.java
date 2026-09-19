@@ -3,11 +3,16 @@ package com.minimals.client;
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
 import com.minimals.client.module.setting.Setting;
+import com.minimals.client.module.setting.StringSetting;
+import com.minimals.client.ui.Animation;
 import com.minimals.client.ui.CategoryTabWidget;
+import com.minimals.client.ui.GearButtonWidget;
 import com.minimals.client.ui.KeybindRowWidget;
 import com.minimals.client.ui.ModuleRowWidget;
 import com.minimals.client.ui.SettingRowWidget;
+import com.minimals.client.ui.TextFieldRowWidget;
 import com.minimals.client.ui.UiRenderer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
@@ -36,11 +41,25 @@ public class MenuScreen extends Screen {
     private static final int CONTENT_PADDING = 14;
     private static final int SETTING_INDENT = 12;
     private static final int SCROLL_STEP = 16;
+    private static final int GEAR_SIZE = 22;
 
     private static Module.Category activeCategory = Module.Category.COMBAT;
 
+    /** True while the global settings page replaces the module list. Survives reopening. */
+    private static boolean settingsOpen = false;
+
     /** Modules whose dropdown is open. Static so it survives closing/reopening the menu. */
     private static final Set<Module> EXPANDED = new HashSet<>();
+
+    private static final long OPEN_FADE_MS = 160;
+    private static final long ROW_FADE_MS = 140;
+
+    /** Fade-in of the whole panel; restarted every time the menu opens. */
+    private final Animation openFade = new Animation(0f, OPEN_FADE_MS);
+    /** Sidebar tabs and gear: static widgets, rendered by us so the panel fade covers them. */
+    private final List<AbstractWidget> chromeWidgets = new ArrayList<>();
+    /** Per-row fade for rows created by the latest rebuild (dropdown open, page switch). */
+    private final Map<AbstractWidget, Animation> rowFade = new HashMap<>();
 
     private final List<AbstractWidget> contentWidgets = new ArrayList<>();
     private final List<KeybindRowWidget> keybindRows = new ArrayList<>();
@@ -72,6 +91,8 @@ public class MenuScreen extends Screen {
 
     @Override
     protected void init() {
+        // init() also runs on window resize; screen widgets were cleared by then.
+        chromeWidgets.clear();
         int px = panelX();
         int py = panelY();
 
@@ -81,17 +102,31 @@ public class MenuScreen extends Screen {
             CategoryTabWidget tab = new CategoryTabWidget(
                     px + 10, tabY + i * (TAB_H + 2), SIDEBAR_W - 20, TAB_H,
                     category,
-                    () -> activeCategory,
+                    () -> !settingsOpen && activeCategory == category,
                     selected -> {
                         activeCategory = selected;
+                        settingsOpen = false;
                         scrollOffset = 0;
                         rebuildContent();
                     }
             );
             addRenderableWidget(tab);
+            chromeWidgets.add(tab);
             i++;
         }
 
+        GearButtonWidget gear = new GearButtonWidget(
+                px + 10, py + PANEL_H - GEAR_SIZE - 10, GEAR_SIZE,
+                () -> settingsOpen,
+                () -> {
+                    settingsOpen = !settingsOpen;
+                    scrollOffset = 0;
+                    rebuildContent();
+                });
+        addRenderableWidget(gear);
+        chromeWidgets.add(gear);
+
+        openFade.setTarget(1f);
         rebuildContent();
     }
 
@@ -113,11 +148,17 @@ public class MenuScreen extends Screen {
         contentWidgets.clear();
         keybindRows.clear();
         baseY.clear();
+        rowFade.clear();
 
         int px = panelX();
         int contentX = px + SIDEBAR_W + CONTENT_PADDING;
         int contentW = PANEL_W - SIDEBAR_W - CONTENT_PADDING * 2;
         int y = viewportTop();
+
+        if (settingsOpen) {
+            buildSettingsPage(contentX, y, contentW);
+            return;
+        }
 
         for (Module module : ModuleManager.getModules(activeCategory)) {
             ModuleRowWidget row = new ModuleRowWidget(contentX, y, contentW, ROW_H, module,
@@ -144,10 +185,31 @@ public class MenuScreen extends Screen {
         applyScroll();
     }
 
+    /**
+     * Global settings page (opened with the gear): animations, font, opacity and the
+     * client-side nickname with its style and colour.
+     */
+    private void buildSettingsPage(int contentX, int y, int contentW) {
+        for (Setting<?> setting : ClientSettings.ALL) {
+            if (setting instanceof StringSetting text) {
+                track(new TextFieldRowWidget(contentX, y, contentW, SETTING_ROW_H, text));
+            } else {
+                track(new SettingRowWidget(contentX, y, contentW, SETTING_ROW_H, setting));
+            }
+            y += SETTING_ROW_H + ROW_GAP;
+        }
+        contentHeight = y - viewportTop();
+        clampScroll();
+        applyScroll();
+    }
+
     private void track(AbstractWidget widget) {
         addRenderableWidget(widget);
         contentWidgets.add(widget);
         baseY.put(widget, widget.getY());
+        Animation fade = new Animation(0f, ROW_FADE_MS);
+        fade.setTarget(1f);
+        rowFade.put(widget, fade);
     }
 
     private int maxScroll() {
@@ -206,7 +268,25 @@ public class MenuScreen extends Screen {
                 return false;
             }
         }
-        return true;
+        // Same for the nickname field: ESC leaves the field, it must not close the menu.
+        return !isTextFieldFocused();
+    }
+
+    /**
+     * True while the player is typing into a text field of the menu. The tick loop uses this
+     * to ignore the HUD/menu hotkeys so typing "h" or pressing RSHIFT cannot fire them.
+     */
+    public static boolean isTypingInMenu() {
+        return Minecraft.getInstance().gui.screen() instanceof MenuScreen menu && menu.isTextFieldFocused();
+    }
+
+    private boolean isTextFieldFocused() {
+        for (AbstractWidget widget : contentWidgets) {
+            if (widget instanceof TextFieldRowWidget && widget.isFocused()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -214,15 +294,34 @@ public class MenuScreen extends Screen {
         int px = panelX();
         int py = panelY();
 
-        UiRenderer.roundedRect(graphics, px, py, px + PANEL_W, py + PANEL_H, PANEL_RADIUS, UiRenderer.PANEL_BG);
-        UiRenderer.roundedRect(graphics, px, py, px + SIDEBAR_W, py + PANEL_H, PANEL_RADIUS, UiRenderer.SIDEBAR_BG);
-        // square off the inner edge of the sidebar so it doesn't look like a floating rounded pill
-        graphics.fill(px + SIDEBAR_W - PANEL_RADIUS, py, px + SIDEBAR_W, py + PANEL_H, UiRenderer.SIDEBAR_BG);
+        try {
+            UiRenderer.setFade(openFade.get());
+            UiRenderer.roundedRect(graphics, px, py, px + PANEL_W, py + PANEL_H, PANEL_RADIUS, UiRenderer.PANEL_BG);
+            UiRenderer.roundedRect(graphics, px, py, px + SIDEBAR_W, py + PANEL_H, PANEL_RADIUS, UiRenderer.SIDEBAR_BG);
+            // square off the inner edge of the sidebar so it doesn't look like a floating rounded pill
+            graphics.fill(px + SIDEBAR_W - PANEL_RADIUS, py, px + SIDEBAR_W, py + PANEL_H,
+                    UiRenderer.withOpacity(UiRenderer.SIDEBAR_BG));
 
-        graphics.fill(px + 10, py + 8, px + 13, py + HEADER_H - 10, UiRenderer.ACCENT);
-        graphics.text(this.font, "Minimals", px + 20, py + 16, UiRenderer.TEXT_PRIMARY, false);
+            graphics.fill(px + 10, py + 8, px + 13, py + HEADER_H - 10, UiRenderer.withOpacity(UiRenderer.ACCENT));
+            UiRenderer.text(graphics, "Minimals", px + 20, py + 16, UiRenderer.TEXT_PRIMARY);
 
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+            for (AbstractWidget widget : chromeWidgets) {
+                widget.extractRenderState(graphics, mouseX, mouseY, delta);
+            }
+            for (AbstractWidget widget : contentWidgets) {
+                Animation row = rowFade.get(widget);
+                UiRenderer.setFade(openFade.get() * (row == null ? 1f : row.get()));
+                widget.extractRenderState(graphics, mouseX, mouseY, delta);
+            }
+        } finally {
+            UiRenderer.setFade(1f);
+        }
+    }
+
+    @Override
+    public void removed() {
+        UiRenderer.setFade(1f);
+        super.removed();
     }
 
     @Override

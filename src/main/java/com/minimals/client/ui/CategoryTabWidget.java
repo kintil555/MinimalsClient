@@ -5,16 +5,16 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 public class CategoryTabWidget extends Button {
 
     private final Module.Category category;
-    private final Supplier<Module.Category> activeSupplier;
+    private final BooleanSupplier activeSupplier;
 
     public CategoryTabWidget(int x, int y, int width, int height, Module.Category category,
-                              Supplier<Module.Category> activeSupplier, Consumer<Module.Category> onSelect) {
+                              BooleanSupplier activeSupplier, Consumer<Module.Category> onSelect) {
         super(x, y, width, height, Component.literal(category.label), btn -> onSelect.accept(category), DEFAULT_NARRATION);
         this.category = category;
         this.activeSupplier = activeSupplier;
@@ -22,7 +22,7 @@ public class CategoryTabWidget extends Button {
 
     @Override
     protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        boolean active = activeSupplier.get() == category;
+        boolean active = activeSupplier.getAsBoolean();
         int w = getWidth();
         int h = getHeight();
 
@@ -33,7 +33,6 @@ public class CategoryTabWidget extends Button {
         }
 
         int textColor = active ? UiRenderer.ACCENT : UiRenderer.TEXT_SECONDARY;
-        graphics.text(net.minecraft.client.Minecraft.getInstance().font, category.label,
-                getX() + 14, getY() + (h - 8) / 2, textColor, false);
+        UiRenderer.text(graphics, category.label, getX() + 14, getY() + (h - 8) / 2, textColor);
     }
 }

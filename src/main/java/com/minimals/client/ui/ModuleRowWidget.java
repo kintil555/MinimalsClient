@@ -1,7 +1,6 @@
 package com.minimals.client.ui;
 
 import com.minimals.client.module.Module;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.input.InputWithModifiers;
@@ -61,16 +60,15 @@ public class ModuleRowWidget extends Button {
             UiRenderer.roundedRect(graphics, getX(), getY(), getX() + w, getY() + h, 6, rowColor);
         }
 
-        var font = Minecraft.getInstance().font;
         int textColor = module.isEnabled() ? UiRenderer.TEXT_PRIMARY : UiRenderer.TEXT_SECONDARY;
-        graphics.text(font, module.getName(), getX() + 12, getY() + (h - 8) / 2, textColor, false);
+        UiRenderer.text(graphics, module.getName(), getX() + 12, getY() + (h - 8) / 2, textColor);
 
         // arrow icon: ">" collapsed, "v" expanded. Highlighted when the cursor is over its zone.
         boolean overArrow = hovered && isInArrowZone(mouseX);
         int arrowColor = overArrow || expanded ? UiRenderer.ACCENT : UiRenderer.TEXT_SECONDARY;
         String arrow = expanded ? "v" : ">";
-        int arrowX = getX() + w - ARROW_ZONE_W + (ARROW_ZONE_W - font.width(arrow)) / 2;
-        graphics.text(font, arrow, arrowX, getY() + (h - 8) / 2, arrowColor, false);
+        int arrowX = getX() + w - ARROW_ZONE_W + (ARROW_ZONE_W - UiRenderer.textWidth(arrow)) / 2;
+        UiRenderer.text(graphics, arrow, arrowX, getY() + (h - 8) / 2, arrowColor);
 
         int toggleW = 8;
         int toggleH = 8;

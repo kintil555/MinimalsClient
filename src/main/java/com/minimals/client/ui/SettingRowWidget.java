@@ -1,9 +1,9 @@
 package com.minimals.client.ui;
 
+import com.minimals.client.module.setting.BoolSetting;
 import com.minimals.client.module.setting.EnumSetting;
 import com.minimals.client.module.setting.IntSetting;
 import com.minimals.client.module.setting.Setting;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -31,7 +31,9 @@ public class SettingRowWidget extends Button {
 
     @Override
     public void onClick(MouseButtonEvent event, boolean doubleClick) {
-        if (setting instanceof EnumSetting<?> enumSetting) {
+        if (setting instanceof BoolSetting boolSetting) {
+            boolSetting.toggle();
+        } else if (setting instanceof EnumSetting<?> enumSetting) {
             enumSetting.cycle();
         } else if (setting instanceof IntSetting intSetting) {
             boolean rightHalf = event.x() >= getX() + getWidth() / 2.0;
@@ -56,13 +58,13 @@ public class SettingRowWidget extends Button {
             UiRenderer.roundedRect(graphics, getX(), getY(), getX() + w, getY() + h, 5, UiRenderer.ROW_BG_HOVER);
         }
 
-        var font = Minecraft.getInstance().font;
         int textY = getY() + (h - 8) / 2;
-        graphics.text(font, setting.getName(), getX() + 10, textY, UiRenderer.TEXT_SECONDARY, false);
+        UiRenderer.text(graphics, setting.getName(), getX() + 10, textY, UiRenderer.TEXT_SECONDARY);
 
         String value = setting.getDisplayValue();
-        int valueX = getX() + w - font.width(value) - 10;
-        graphics.text(font, value, valueX, textY, UiRenderer.TEXT_PRIMARY, false);
+        int valueX = getX() + w - UiRenderer.textWidth(value) - 10;
+        int valueColor = setting instanceof BoolSetting b && b.get() ? UiRenderer.ACCENT : UiRenderer.TEXT_PRIMARY;
+        UiRenderer.text(graphics, value, valueX, textY, valueColor);
 
         if (setting instanceof IntSetting intSetting) {
             int barX1 = getX() + 10;
