@@ -21,7 +21,7 @@ public class CategoryTabWidget extends Button {
     }
 
     @Override
-    protected void renderWidget(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         boolean active = activeSupplier.get() == category;
         int w = getWidth();
         int h = getHeight();

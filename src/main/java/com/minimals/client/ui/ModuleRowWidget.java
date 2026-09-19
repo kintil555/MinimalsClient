@@ -15,7 +15,7 @@ public class ModuleRowWidget extends Button {
     }
 
     @Override
-    protected void renderWidget(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         boolean hovered = isHovered();
         int w = getWidth();
         int h = getHeight();
