@@ -4,7 +4,7 @@
   "package": "com.minimals.client.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "LightTextureMixin"
+    "LightmapMixin"
   ],
   "injectors": {
     "defaultRequire": 1
