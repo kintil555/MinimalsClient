@@ -13,16 +13,21 @@ public class ModuleManager {
     static {
         register(new Module("AutoSwap", Module.Category.COMBAT));
         register(new HitBoxesModule());
+        register(new CustomHitSoundModule());
 
         register(new Module("Sprint", Module.Category.MOVEMENT));
         register(new Module("Nearby Entities", Module.Category.MOVEMENT));
 
+        register(new LowOnFireModule());
+        register(new HurtColorModule());
         register(new Module("Fullbright", Module.Category.VISUALS));
         register(new Module("HUD", Module.Category.VISUALS, true));
+        register(new KeystrokeModule());
         register(new BlockOnEntitiesModule());
         register(new SnapPerspectiveModule());
 
         register(new OptimizationModule());
+        register(new CrystalOptimizerModule());
     }
 
     private ModuleManager() {
@@ -57,6 +62,51 @@ public class ModuleManager {
             }
         }
         throw new IllegalStateException("OptimizationModule is not registered");
+    }
+
+    public static LowOnFireModule lowOnFire() {
+        for (Module m : MODULES) {
+            if (m instanceof LowOnFireModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("LowOnFireModule is not registered");
+    }
+
+    public static HurtColorModule hurtColor() {
+        for (Module m : MODULES) {
+            if (m instanceof HurtColorModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("HurtColorModule is not registered");
+    }
+
+    public static CrystalOptimizerModule crystalOptimizer() {
+        for (Module m : MODULES) {
+            if (m instanceof CrystalOptimizerModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("CrystalOptimizerModule is not registered");
+    }
+
+    public static CustomHitSoundModule customHitSound() {
+        for (Module m : MODULES) {
+            if (m instanceof CustomHitSoundModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("CustomHitSoundModule is not registered");
+    }
+
+    public static KeystrokeModule keystrokes() {
+        for (Module m : MODULES) {
+            if (m instanceof KeystrokeModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("KeystrokeModule is not registered");
     }
 
     public static boolean isEnabled(String name) {

@@ -12,9 +12,11 @@ import com.minimals.client.ui.ModuleRowWidget;
 import com.minimals.client.ui.SettingRowWidget;
 import com.minimals.client.ui.TextFieldRowWidget;
 import com.minimals.client.ui.UiRenderer;
+import com.minimals.client.ui.hud.HudEditorScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
@@ -198,6 +200,16 @@ public class MenuScreen extends Screen {
             }
             y += SETTING_ROW_H + ROW_GAP;
         }
+        // HUD Editor button
+        Button hudEditorBtn = Button.builder(
+                Component.literal("Open HUD Editor"),
+                btn -> {
+                    Minecraft.getInstance().gui.setScreen(new HudEditorScreen());
+                }
+        ).bounds(contentX, y, contentW, SETTING_ROW_H).build();
+        track(hudEditorBtn);
+        y += SETTING_ROW_H + ROW_GAP;
+
         contentHeight = y - viewportTop();
         clampScroll();
         applyScroll();

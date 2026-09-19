@@ -2,6 +2,11 @@ package com.minimals.client;
 
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
+import com.minimals.client.ui.hud.ArraylistElement;
+import com.minimals.client.ui.hud.HudEditorScreen;
+import com.minimals.client.ui.hud.HudElement;
+import com.minimals.client.ui.hud.HudRegistry;
+import com.minimals.client.ui.hud.KeystrokeElement;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -12,13 +17,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.DeltaTracker;
-import net.minecraft.client.gui.Font;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import com.mojang.blaze3d.platform.InputConstants;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 public class MinimalClientMod implements ClientModInitializer {
@@ -30,6 +32,7 @@ public class MinimalClientMod implements ClientModInitializer {
 
     private static KeyMapping menuKey;
     private static KeyMapping hudToggleKey;
+    private static KeyMapping hudEditorKey;
     public static boolean hudVisible = true;
 
     /** Modules whose keybind was already down last tick, so a held key toggles only once. */
@@ -50,6 +53,16 @@ public class MinimalClientMod implements ClientModInitializer {
                 InputConstants.KEY_H,
                 CATEGORY
         ));
+
+        hudEditorKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.minimals.hud_editor",
+                InputConstants.Type.KEYSYM,
+                InputConstants.KEY_J,
+                CATEGORY
+        ));
+
+        HudRegistry.register(new ArraylistElement());
+        HudRegistry.register(new KeystrokeElement());
 
         HudElementRegistry.attachElementAfter(
                 VanillaHudElements.MISC_OVERLAYS,
@@ -74,8 +87,17 @@ public class MinimalClientMod implements ClientModInitializer {
             while (hudToggleKey.consumeClick()) {
                 hudVisible = !hudVisible;
             }
+            while (hudEditorKey.consumeClick()) {
+                if (client.gui.screen() == null) {
+                    client.gui.setScreen(new HudEditorScreen());
+                } else if (client.gui.screen() instanceof HudEditorScreen) {
+                    client.gui.setScreen((Screen) null);
+                }
+            }
 
             pollModuleKeybinds(client);
+
+            ModuleManager.keystrokes().tick();
 
             // Sprint module: force sprint while moving forward, no double-tap needed.
             if (ModuleManager.isEnabled("Sprint") && client.player != null) {
@@ -133,39 +155,15 @@ public class MinimalClientMod implements ClientModInitializer {
     }
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
-        if (!hudVisible || !ClientSettings.ARRAYLIST.get()) return;
-        Minecraft client = Minecraft.getInstance();
-        Font font = client.font;
-
-        List<Module> active = ModuleManager.getAllModules().stream()
-                .filter(Module::isEnabled)
-                .toList();
-
-        if (active.isEmpty()) return;
-
-        int padding = 5;
-        int lineHeight = 10;
-        int x = 6;
-        int y = 6;
-
-        int maxWidth = 0;
-        for (Module module : active) {
-            maxWidth = Math.max(maxWidth, font.width(module.getName()));
-        }
-
-        int boxW = maxWidth + padding * 2;
-        int boxH = active.size() * lineHeight + padding * 2 - 2;
-
-        drawRoundedBox(graphics, x, y, x + boxW, y + boxH, 6, 0x99000000);
-
-        int textY = y + padding;
-        for (Module module : active) {
-            graphics.text(font, module.getName(), x + padding, textY, 0xFFFFFFFF, true);
-            textY += lineHeight;
+        if (!hudVisible) return;
+        for (HudElement element : HudRegistry.all()) {
+            if (element.isActive()) {
+                element.render(graphics, deltaTracker, element.getX(graphics.guiWidth()), element.getY(graphics.guiHeight()));
+            }
         }
     }
 
-    static void drawRoundedBox(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {
+    public static void drawRoundedBox(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {
         // center
         graphics.fill(x1 + radius, y1, x2 - radius, y2, color);
         graphics.fill(x1, y1 + radius, x2, y2 - radius, color);
