@@ -36,20 +36,11 @@ public class MenuScreen extends Screen {
         String hud = "HUD: " + (MinimalClientMod.hudVisible ? "On" : "Off");
         graphics.text(this.font, hud, titleX, titleY + 20, 0xFFFFFF, true);
 
-        graphics.text(this.font, "Press Right Shift to close", titleX, titleY + 48, 0xAAAAAA, true);
+        graphics.text(this.font, "Right Shift: close  |  H: toggle HUD", titleX, titleY + 48, 0xAAAAAA, true);
     }
 
     @Override
     public boolean shouldCloseOnEsc() {
         return true;
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 72) { // 'H'
-            MinimalClientMod.hudVisible = !MinimalClientMod.hudVisible;
-            return true;
-        }
-        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 }

@@ -2,8 +2,8 @@ package com.minimals.client;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyMappingHelper;
-import net.fabricmc.fabric.api.client.rendering.v1.HudElementRegistry;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -23,6 +23,7 @@ public class MinimalClientMod implements ClientModInitializer {
             KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "category"));
 
     private static KeyMapping menuKey;
+    private static KeyMapping hudToggleKey;
     public static boolean hudVisible = true;
 
     @Override
@@ -34,6 +35,13 @@ public class MinimalClientMod implements ClientModInitializer {
                 CATEGORY
         ));
 
+        hudToggleKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.minimals.toggle_hud",
+                InputConstants.Type.KEYSYM,
+                InputConstants.KEY_H,
+                CATEGORY
+        ));
+
         HudElementRegistry.attachElementAfter(
                 VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath(MOD_ID, "minimals_hud"),
@@ -42,11 +50,14 @@ public class MinimalClientMod implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (menuKey.consumeClick()) {
-                if (client.screen == null) {
-                    client.setScreen(new MenuScreen());
-                } else if (client.screen instanceof MenuScreen) {
-                    client.setScreen((Screen) null);
+                if (client.gui.screen() == null) {
+                    client.gui.setScreen(new MenuScreen());
+                } else if (client.gui.screen() instanceof MenuScreen) {
+                    client.gui.setScreen((Screen) null);
                 }
+            }
+            while (hudToggleKey.consumeClick()) {
+                hudVisible = !hudVisible;
             }
         });
     }
