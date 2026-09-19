@@ -17,7 +17,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import com.mojang.blaze3d.platform.InputConstants;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class MinimalClientMod implements ClientModInitializer {
 
@@ -29,6 +31,9 @@ public class MinimalClientMod implements ClientModInitializer {
     private static KeyMapping menuKey;
     private static KeyMapping hudToggleKey;
     public static boolean hudVisible = true;
+
+    /** Modules whose keybind was already down last tick, so a held key toggles only once. */
+    private static final Set<Module> HELD_KEYBINDS = new HashSet<>();
 
     @Override
     public void onInitializeClient() {
@@ -64,6 +69,8 @@ public class MinimalClientMod implements ClientModInitializer {
                 hudVisible = !hudVisible;
             }
 
+            pollModuleKeybinds(client);
+
             // Sprint module: force sprint while moving forward, no double-tap needed.
             if (ModuleManager.isEnabled("Sprint") && client.player != null) {
                 if (client.options.keyUp.isDown() && !client.player.isSprinting()
@@ -72,6 +79,28 @@ public class MinimalClientMod implements ClientModInitializer {
                 }
             }
         });
+    }
+
+    /**
+     * Toggles modules whose user-assigned key was just pressed. Skipped while any screen is
+     * open (chat, menu rebinding, inventory) so typing never flips a module by accident.
+     */
+    private static void pollModuleKeybinds(Minecraft client) {
+        if (client.gui.screen() != null) {
+            HELD_KEYBINDS.clear();
+            return;
+        }
+        for (Module module : ModuleManager.getAllModules()) {
+            if (!module.hasKeyBind()) {
+                continue;
+            }
+            boolean down = InputConstants.isKeyDown(client.getWindow(), module.getKeyBind());
+            if (down && HELD_KEYBINDS.add(module)) {
+                module.toggle();
+            } else if (!down) {
+                HELD_KEYBINDS.remove(module);
+            }
+        }
     }
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {

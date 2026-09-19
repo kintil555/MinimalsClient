@@ -19,7 +19,7 @@ public class ModuleManager {
 
         register(new Module("Fullbright", Module.Category.VISUALS));
         register(new Module("HUD", Module.Category.VISUALS, true));
-        register(new Module("Block On Entities", Module.Category.VISUALS));
+        register(new BlockOnEntitiesModule());
     }
 
     private ModuleManager() {
@@ -36,6 +36,15 @@ public class ModuleManager {
 
     public static List<Module> getAllModules() {
         return MODULES;
+    }
+
+    public static BlockOnEntitiesModule blockOnEntities() {
+        for (Module m : MODULES) {
+            if (m instanceof BlockOnEntitiesModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("BlockOnEntitiesModule is not registered");
     }
 
     public static boolean isEnabled(String name) {
