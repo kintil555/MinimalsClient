@@ -97,6 +97,9 @@ public final class UiRenderer {
     public static final int SIDEBAR_BG = 0xF01A1A1F;
     public static final int ROW_BG = 0x00000000;
     public static final int ROW_BG_HOVER = 0x1AFFFFFF;
+    /** Header buttons/search box: a step lighter than PANEL_BG so they read as raised controls. */
+    public static final int HEADER_BTN_BG = 0xFF23232B;
+    public static final int HEADER_BTN_BG_HOVER = 0xFF2E2E38;
     public static final int ACCENT = 0xFF8B5CF6;
     public static final int TEXT_PRIMARY = 0xFFE8E8ED;
     public static final int TEXT_SECONDARY = 0xFF9A9AA5;

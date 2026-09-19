@@ -9,9 +9,11 @@ import com.minimals.client.ui.Animation;
 import com.minimals.client.ui.CategoryTabWidget;
 import com.minimals.client.ui.ColorWheelRowWidget;
 import com.minimals.client.ui.GearButtonWidget;
+import com.minimals.client.ui.HeaderIconButtonWidget;
 import com.minimals.client.ui.InfoRowWidget;
 import com.minimals.client.ui.KeybindRowWidget;
 import com.minimals.client.ui.ModuleRowWidget;
+import com.minimals.client.ui.SearchFieldWidget;
 import com.minimals.client.ui.SettingRowWidget;
 import com.minimals.client.ui.TextFieldRowWidget;
 import com.minimals.client.ui.UiRenderer;
@@ -40,6 +42,7 @@ public class MenuScreen extends Screen {
     private static final int SIDEBAR_W = 130;
     private static final int HEADER_H = 44;
     private static final int TAB_H = 26;
+    private static final int HEADER_BTN = 26;
     private static final int ROW_H = 24;
     private static final int SETTING_ROW_H = 22;
     private static final int ROW_GAP = 4;
@@ -48,7 +51,12 @@ public class MenuScreen extends Screen {
     private static final int SCROLL_STEP = 16;
     private static final int GEAR_SIZE = 22;
 
+    /** Selected category; null means the synthetic "All" tab (every module). */
     private static Module.Category activeCategory = Module.Category.COMBAT;
+    /** Category to return to when the search box is cleared. Never null. */
+    private static Module.Category lastCategory = Module.Category.COMBAT;
+    /** Text in the header search box; kept across reopening the menu. */
+    private static String searchQuery = "";
 
     /** Name typed in the Config row; Save/Load act on it. Survives reopening the menu. */
     private static final StringSetting CONFIG_NAME = new StringSetting("Config", ConfigManager.DEFAULT_NAME, 24);
@@ -68,6 +76,7 @@ public class MenuScreen extends Screen {
     private final Animation openFade = new Animation(0f, OPEN_FADE_MS);
     /** Sidebar tabs and gear: static widgets, rendered by us so the panel fade covers them. */
     private final List<AbstractWidget> chromeWidgets = new ArrayList<>();
+    private SearchFieldWidget searchField;
     /** Per-row fade for rows created by the latest rebuild (dropdown open, page switch). */
     private final Map<AbstractWidget, Animation> rowFade = new HashMap<>();
 
@@ -106,8 +115,39 @@ public class MenuScreen extends Screen {
         int px = panelX();
         int py = panelY();
 
+        // Header: search field + HUD editor button, right of the "Minimals" title area.
+        int headerX = px + SIDEBAR_W + CONTENT_PADDING;
+        int headerRight = px + PANEL_W - CONTENT_PADDING;
+        int headerY = py + (HEADER_H - HEADER_BTN) / 2;
+        int searchW = headerRight - headerX - HEADER_BTN - ROW_GAP * 2;
+        searchField = new SearchFieldWidget(headerX, headerY, searchW, HEADER_BTN, searchQuery, this::onSearchChanged);
+        addRenderableWidget(searchField);
+        chromeWidgets.add(searchField);
+
+        HeaderIconButtonWidget hudEditor = new HeaderIconButtonWidget(
+                headerRight - HEADER_BTN, headerY, HEADER_BTN,
+                "editor", "HUD Editor",
+                () -> Minecraft.getInstance().gui.setScreen(new HudEditorScreen()));
+        addRenderableWidget(hudEditor);
+        chromeWidgets.add(hudEditor);
+
+        // Sidebar tabs. "All" only exists while there is a search query.
         int tabY = py + HEADER_H;
         int i = 0;
+        if (!searchQuery.isEmpty()) {
+            CategoryTabWidget allTab = CategoryTabWidget.all(
+                    px + 10, tabY + i * (TAB_H + 2), SIDEBAR_W - 20, TAB_H,
+                    () -> !settingsOpen && activeCategory == null,
+                    () -> {
+                        activeCategory = null;
+                        settingsOpen = false;
+                        scrollOffset = 0;
+                        rebuildContent();
+                    });
+            addRenderableWidget(allTab);
+            chromeWidgets.add(allTab);
+            i++;
+        }
         for (Module.Category category : Module.Category.values()) {
             CategoryTabWidget tab = new CategoryTabWidget(
                     px + 10, tabY + i * (TAB_H + 2), SIDEBAR_W - 20, TAB_H,
@@ -115,6 +155,7 @@ public class MenuScreen extends Screen {
                     () -> !settingsOpen && activeCategory == category,
                     selected -> {
                         activeCategory = selected;
+                        lastCategory = selected;
                         settingsOpen = false;
                         scrollOffset = 0;
                         rebuildContent();
@@ -138,6 +179,51 @@ public class MenuScreen extends Screen {
 
         openFade.setTarget(1f);
         rebuildContent();
+    }
+
+    /**
+     * Search text changed. Typing switches to the All tab; clearing the box goes back to the
+     * last real category. Tabs are rebuilt because "All" appears/disappears with the query.
+     */
+    private void onSearchChanged(String query) {
+        boolean hadQuery = !searchQuery.isEmpty();
+        searchQuery = query;
+        boolean hasQuery = !query.isEmpty();
+        settingsOpen = false;
+        scrollOffset = 0;
+        if (hasQuery && !hadQuery) {
+            activeCategory = null;
+        } else if (!hasQuery) {
+            activeCategory = lastCategory;
+        }
+        if (hasQuery != hadQuery) {
+            // "All" tab added/removed: rebuild the whole screen, keeping the field focused.
+            this.rebuildWidgets();
+            if (searchField != null) {
+                setFocused(searchField);
+                searchField.setFocused(true);
+            }
+        } else {
+            rebuildContent();
+        }
+    }
+
+    /** Modules shown in the list: the active category, or everything on All; filtered by search. */
+    private List<Module> visibleModules() {
+        List<Module> base = activeCategory == null
+                ? ModuleManager.getAllModules()
+                : ModuleManager.getModules(activeCategory);
+        if (searchQuery.isEmpty()) {
+            return base;
+        }
+        String needle = searchQuery.toLowerCase(java.util.Locale.ROOT);
+        List<Module> result = new ArrayList<>();
+        for (Module module : base) {
+            if (module.getName().toLowerCase(java.util.Locale.ROOT).contains(needle)) {
+                result.add(module);
+            }
+        }
+        return result;
     }
 
     private void toggleExpanded(Module module) {
@@ -170,7 +256,7 @@ public class MenuScreen extends Screen {
             return;
         }
 
-        for (Module module : ModuleManager.getModules(activeCategory)) {
+        for (Module module : visibleModules()) {
             ModuleRowWidget row = new ModuleRowWidget(contentX, y, contentW, ROW_H, module,
                     () -> EXPANDED.contains(module), () -> toggleExpanded(module));
             track(row);
@@ -193,6 +279,12 @@ public class MenuScreen extends Screen {
                 track(keybind);
                 y += SETTING_ROW_H + ROW_GAP;
             }
+        }
+
+        if (visibleModules().isEmpty()) {
+            track(new InfoRowWidget(contentX, y, contentW, SETTING_ROW_H,
+                    searchQuery.isEmpty() ? "No modules" : "No modules match '" + searchQuery + "'"));
+            y += SETTING_ROW_H + ROW_GAP;
         }
 
         contentHeight = y - viewportTop();
@@ -239,16 +331,6 @@ public class MenuScreen extends Screen {
             track(new InfoRowWidget(contentX, y, contentW, SETTING_ROW_H, "Available: " + available));
             y += SETTING_ROW_H + ROW_GAP;
         }
-
-        // HUD Editor button
-        Button hudEditorBtn = Button.builder(
-                Component.literal("Open HUD Editor"),
-                btn -> {
-                    Minecraft.getInstance().gui.setScreen(new HudEditorScreen());
-                }
-        ).bounds(contentX, y, contentW, SETTING_ROW_H).build();
-        track(hudEditorBtn);
-        y += SETTING_ROW_H + ROW_GAP;
 
         contentHeight = y - viewportTop();
         clampScroll();
@@ -333,6 +415,9 @@ public class MenuScreen extends Screen {
     }
 
     private boolean isTextFieldFocused() {
+        if (searchField != null && searchField.isFocused()) {
+            return true;
+        }
         for (AbstractWidget widget : contentWidgets) {
             if (widget instanceof TextFieldRowWidget && widget.isFocused()) {
                 return true;
@@ -356,6 +441,10 @@ public class MenuScreen extends Screen {
 
             graphics.fill(px + 10, py + 8, px + 13, py + HEADER_H - 10, UiRenderer.withOpacity(UiRenderer.ACCENT));
             UiRenderer.text(graphics, "Minimals", px + 20, py + 16, UiRenderer.TEXT_PRIMARY);
+
+            // hairline separating the header from the module list
+            graphics.fill(px + SIDEBAR_W, py + HEADER_H - 1, px + PANEL_W - PANEL_RADIUS, py + HEADER_H,
+                    UiRenderer.withOpacity(0x22FFFFFF));
 
             for (AbstractWidget widget : chromeWidgets) {
                 widget.extractRenderState(graphics, mouseX, mouseY, delta);
