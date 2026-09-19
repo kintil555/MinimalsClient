@@ -92,12 +92,18 @@ public class MinimalClientMod implements ClientModInitializer {
      * open (chat, menu rebinding, inventory) so typing never flips a module by accident.
      */
     private static void pollModuleKeybinds(Minecraft client) {
-        if (client.gui.screen() != null) {
+        Screen screen = client.gui.screen();
+        for (Module module : ModuleManager.getAllModules()) {
+            if (module.isHoldKeybind()) {
+                syncHoldModule(client, module, screen);
+            }
+        }
+        if (screen != null) {
             HELD_KEYBINDS.clear();
             return;
         }
         for (Module module : ModuleManager.getAllModules()) {
-            if (!module.hasKeyBind()) {
+            if (!module.hasKeyBind() || module.isHoldKeybind()) {
                 continue;
             }
             boolean down = InputConstants.isKeyDown(client.getWindow(), module.getKeyBind());
@@ -109,8 +115,25 @@ public class MinimalClientMod implements ClientModInitializer {
         }
     }
 
+    /**
+     * Hold-type modules are on exactly while their key is down. With no screen open the key
+     * state decides; with the Minimals menu open the state is left alone so the row can be
+     * previewed by clicking; any other screen (chat, inventory...) releases it so typing the
+     * bound letter cannot trigger it.
+     */
+    private static void syncHoldModule(Minecraft client, Module module, Screen screen) {
+        if (screen instanceof MenuScreen) {
+            return;
+        }
+        boolean want = screen == null && module.hasKeyBind()
+                && InputConstants.isKeyDown(client.getWindow(), module.getKeyBind());
+        if (module.isEnabled() != want) {
+            module.setEnabled(want);
+        }
+    }
+
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
-        if (!hudVisible) return;
+        if (!hudVisible || !ClientSettings.ARRAYLIST.get()) return;
         Minecraft client = Minecraft.getInstance();
         Font font = client.font;
 
@@ -137,7 +160,7 @@ public class MinimalClientMod implements ClientModInitializer {
 
         int textY = y + padding;
         for (Module module : active) {
-            graphics.text(font, module.getName(), x + padding, textY, 0xFFFFFF, true);
+            graphics.text(font, module.getName(), x + padding, textY, 0xFFFFFFFF, true);
             textY += lineHeight;
         }
     }

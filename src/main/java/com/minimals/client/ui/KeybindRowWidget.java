@@ -73,7 +73,7 @@ public class KeybindRowWidget extends Button {
         }
 
         int textY = getY() + (h - 8) / 2;
-        UiRenderer.text(graphics, "Keybind", getX() + 10, textY, UiRenderer.TEXT_SECONDARY);
+        UiRenderer.text(graphics, module.isHoldKeybind() ? "Hold Key" : "Keybind", getX() + 10, textY, UiRenderer.TEXT_SECONDARY);
 
         String label = keyLabel();
         int color = listening ? UiRenderer.ACCENT : UiRenderer.TEXT_PRIMARY;

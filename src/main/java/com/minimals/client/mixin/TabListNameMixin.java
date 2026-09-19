@@ -11,8 +11,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Tab list nickname. The overlay builds every row through getNameForDisplay(PlayerInfo)
- * (team formatting included), so replacing its result for the local player's row is enough.
+ * Tab list nickname. Every row is built by getNameForDisplay(PlayerInfo). The real name is
+ * replaced inside the result so team prefixes/suffixes survive; if a server-set display name
+ * does not contain the real name at all, the whole row becomes the nickname.
  */
 @Mixin(PlayerTabOverlay.class)
 public class TabListNameMixin {
@@ -22,9 +23,9 @@ public class TabListNameMixin {
         if (!ClientSettings.hasNickname() || !NicknameSupport.isLocalInfo(info)) {
             return;
         }
-        Component nickname = ClientSettings.nicknameComponent();
-        if (nickname != null) {
-            cir.setReturnValue(nickname);
-        }
+        Component original = cir.getReturnValue();
+        cir.setReturnValue(NicknameSupport.containsRealName(original)
+                ? NicknameSupport.replaceRealName(original)
+                : ClientSettings.nicknameComponent());
     }
 }

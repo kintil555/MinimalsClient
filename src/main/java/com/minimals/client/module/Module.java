@@ -87,6 +87,14 @@ public class Module {
     }
 
     /**
+     * True for modules that are active only while their key is held (instead of toggling on
+     * each press).
+     */
+    public boolean isHoldKeybind() {
+        return false;
+    }
+
+    /**
      * Override in subclasses to hook actual behavior when the module is
      * turned on/off. No-op by default (placeholder modules).
      */

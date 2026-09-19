@@ -94,6 +94,9 @@ public final class ClientSettings {
             new EnumSetting<>("Font", GuiFont.DEFAULT, GuiFont.values());
     public static final IntSetting OPACITY = new IntSetting("Opacity", 100, 20, 100, 5, "%");
 
+    /** Active-modules list in the top-left corner. */
+    public static final BoolSetting ARRAYLIST = new BoolSetting("Arraylist", true);
+
     /** Show your own nametag when the camera is in third person. */
     public static final BoolSetting SELF_NAMETAG = new BoolSetting("Third Person Nametag", true);
 
@@ -105,7 +108,7 @@ public final class ClientSettings {
 
     /** Order shown in the settings page. */
     public static final List<Setting<?>> ALL = List.of(
-            ANIMATIONS, FONT, OPACITY, SELF_NAMETAG, NICKNAME, NICKNAME_STYLE, NICKNAME_COLOR);
+            ANIMATIONS, FONT, OPACITY, ARRAYLIST, SELF_NAMETAG, NICKNAME, NICKNAME_STYLE, NICKNAME_COLOR);
 
     private ClientSettings() {
     }

@@ -12,7 +12,7 @@ public class ModuleManager {
 
     static {
         register(new Module("AutoSwap", Module.Category.COMBAT));
-        register(new Module("HitBoxes", Module.Category.COMBAT));
+        register(new HitBoxesModule());
 
         register(new Module("Sprint", Module.Category.MOVEMENT));
         register(new Module("Nearby Entities", Module.Category.MOVEMENT));
@@ -20,6 +20,7 @@ public class ModuleManager {
         register(new Module("Fullbright", Module.Category.VISUALS));
         register(new Module("HUD", Module.Category.VISUALS, true));
         register(new BlockOnEntitiesModule());
+        register(new SnapPerspectiveModule());
     }
 
     private ModuleManager() {

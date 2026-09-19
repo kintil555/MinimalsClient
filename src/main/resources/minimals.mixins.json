@@ -9,7 +9,9 @@
     "PlayerNameMixin",
     "TabListNameMixin",
     "ChatNameMixin",
-    "SelfNameTagMixin"
+    "SelfNameTagMixin",
+    "DebugRendererMixin",
+    "HitboxRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
