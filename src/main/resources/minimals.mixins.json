@@ -6,7 +6,10 @@
   "client": [
     "LightmapMixin",
     "LevelExtractorMixin",
-    "PlayerNameMixin"
+    "PlayerNameMixin",
+    "TabListNameMixin",
+    "ChatNameMixin",
+    "SelfNameTagMixin"
   ],
   "injectors": {
     "defaultRequire": 1
