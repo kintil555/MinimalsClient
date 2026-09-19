@@ -16,7 +16,10 @@
     "EntityCullingMixin",
     "BlockEntityCullingMixin",
     "ParticleAccessor",
-    "ParticleCullingMixin"
+    "ParticleCullingMixin",
+    "OverlayTextureAccessor",
+    "HurtColorMixin",
+    "FireOverlayMixin"
   ],
   "mixins": [
     "PathNavigationMixin"

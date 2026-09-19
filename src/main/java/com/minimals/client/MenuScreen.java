@@ -2,10 +2,12 @@ package com.minimals.client;
 
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
+import com.minimals.client.module.setting.ColorSetting;
 import com.minimals.client.module.setting.Setting;
 import com.minimals.client.module.setting.StringSetting;
 import com.minimals.client.ui.Animation;
 import com.minimals.client.ui.CategoryTabWidget;
+import com.minimals.client.ui.ColorWheelRowWidget;
 import com.minimals.client.ui.GearButtonWidget;
 import com.minimals.client.ui.KeybindRowWidget;
 import com.minimals.client.ui.ModuleRowWidget;
@@ -172,8 +174,13 @@ public class MenuScreen extends Screen {
                 int settingX = contentX + SETTING_INDENT;
                 int settingW = contentW - SETTING_INDENT;
                 for (Setting<?> setting : module.getSettings()) {
-                    track(new SettingRowWidget(settingX, y, settingW, SETTING_ROW_H, setting));
-                    y += SETTING_ROW_H + ROW_GAP;
+                    if (setting instanceof ColorSetting colorSetting) {
+                        track(new ColorWheelRowWidget(settingX, y, settingW, colorSetting));
+                        y += ColorWheelRowWidget.HEIGHT + ROW_GAP;
+                    } else {
+                        track(new SettingRowWidget(settingX, y, settingW, SETTING_ROW_H, setting));
+                        y += SETTING_ROW_H + ROW_GAP;
+                    }
                 }
                 KeybindRowWidget keybind = new KeybindRowWidget(settingX, y, settingW, SETTING_ROW_H, module);
                 keybindRows.add(keybind);
