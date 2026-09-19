@@ -11,7 +11,13 @@
     "ChatNameMixin",
     "SelfNameTagMixin",
     "DebugRendererMixin",
-    "HitboxRendererMixin"
+    "HitboxRendererMixin",
+    "EntityCullingMixin",
+    "BlockEntityCullingMixin",
+    "ParticleCullingMixin"
+  ],
+  "mixins": [
+    "PathNavigationMixin"
   ],
   "injectors": {
     "defaultRequire": 1

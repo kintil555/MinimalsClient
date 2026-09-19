@@ -21,6 +21,8 @@ public class ModuleManager {
         register(new Module("HUD", Module.Category.VISUALS, true));
         register(new BlockOnEntitiesModule());
         register(new SnapPerspectiveModule());
+
+        register(new OptimizationModule());
     }
 
     private ModuleManager() {
@@ -46,6 +48,15 @@ public class ModuleManager {
             }
         }
         throw new IllegalStateException("BlockOnEntitiesModule is not registered");
+    }
+
+    public static OptimizationModule optimization() {
+        for (Module m : MODULES) {
+            if (m instanceof OptimizationModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("OptimizationModule is not registered");
     }
 
     public static boolean isEnabled(String name) {

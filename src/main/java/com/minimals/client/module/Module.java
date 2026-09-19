@@ -16,7 +16,8 @@ public class Module {
     public enum Category {
         COMBAT("Combat"),
         MOVEMENT("Movement"),
-        VISUALS("Visuals");
+        VISUALS("Visuals"),
+        PERFORMANCE("Performance");
 
         public final String label;
 
