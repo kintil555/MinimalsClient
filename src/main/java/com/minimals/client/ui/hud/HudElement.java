@@ -40,9 +40,22 @@ public abstract class HudElement {
         return Math.round(yFrac * screenHeight);
     }
 
+    /** Exact (unrounded) position, used while dragging so the element never snaps to whole pixels. */
+    public float getXExact(int screenWidth) {
+        return xFrac * screenWidth;
+    }
+
+    public float getYExact(int screenHeight) {
+        return yFrac * screenHeight;
+    }
+
     public void setPosition(int x, int y, int screenWidth, int screenHeight) {
-        this.xFrac = clampFrac(x / (float) screenWidth);
-        this.yFrac = clampFrac(y / (float) screenHeight);
+        setPosition((float) x, (float) y, screenWidth, screenHeight);
+    }
+
+    public void setPosition(float x, float y, int screenWidth, int screenHeight) {
+        this.xFrac = clampFrac(x / screenWidth);
+        this.yFrac = clampFrac(y / screenHeight);
     }
 
     private static float clampFrac(float value) {
