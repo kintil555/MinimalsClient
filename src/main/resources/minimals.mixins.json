@@ -15,6 +15,7 @@
     "HitboxRendererMixin",
     "EntityCullingMixin",
     "BlockEntityCullingMixin",
+    "ParticleAccessor",
     "ParticleCullingMixin"
   ],
   "mixins": [

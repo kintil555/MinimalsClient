@@ -9,58 +9,49 @@ import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Particle culling: torch smoke, lava drips and portal particles behind walls still build quads
- * every frame in vanilla. Distance check first (cheap), raycast only for what survives it.
+ * Particle culling: skips extract() for particles behind walls or beyond range.
  *
- * level/x/y/z are declared in Particle (parent class). Without a refMap the Mixin processor
- * cannot resolve inherited fields by name, so we shadow them with remap=false so Mixin skips
- * the remapping step and uses the mojmap name directly.
+ * level/x/y/z are declared in Particle (parent), NOT in SingleQuadParticle.
+ * @Shadow on inherited fields fails without a refMap ("not located in target class").
+ * Fix: use ParticleAccessor (@Accessor interface targeting Particle) and cast.
+ * Since SingleQuadParticle extends Particle, every SingleQuadParticle instance
+ * also implements ParticleAccessor at runtime after mixin merge.
  */
 @Mixin(SingleQuadParticle.class)
 public abstract class ParticleCullingMixin {
-
-    @Shadow(remap = false)
-    protected ClientLevel level;
-
-    @Shadow(remap = false)
-    protected double x;
-
-    @Shadow(remap = false)
-    protected double y;
-
-    @Shadow(remap = false)
-    protected double z;
 
     @Inject(method = "extract", at = @At("HEAD"), cancellable = true)
     private void minimals$cullParticle(QuadParticleRenderState state, Camera camera, float partialTick,
                                        CallbackInfo ci) {
         OptimizationModule module = ModuleManager.optimization();
-        if (!module.isEnabled() || !module.particleCulling.get() || this.level == null) {
-            return;
-        }
+        if (!module.isEnabled() || !module.particleCulling.get()) return;
+
+        ParticleAccessor acc = (ParticleAccessor) this;
+        ClientLevel level = acc.minimals$getLevel();
+        if (level == null) return;
+
+        double px = acc.minimals$getX();
+        double py = acc.minimals$getY();
+        double pz = acc.minimals$getZ();
 
         Vec3 cam = camera.position();
-        double dx = cam.x - this.x;
-        double dy = cam.y - this.y;
-        double dz = cam.z - this.z;
+        double dx = cam.x - px;
+        double dy = cam.y - py;
+        double dz = cam.z - pz;
         double distSqr = dx * dx + dy * dy + dz * dz;
 
         if (distSqr > module.getParticleDistanceSqr()) {
             ci.cancel();
             return;
         }
+        if (distSqr < 16.0) return;
 
-        if (distSqr < 16.0) {
-            return;
-        }
-
-        if (!OcclusionHelper.hasLineOfSight(this.level, cam, this.x, this.y, this.z)) {
+        if (!OcclusionHelper.hasLineOfSight(level, cam, px, py, pz)) {
             ci.cancel();
         }
     }
