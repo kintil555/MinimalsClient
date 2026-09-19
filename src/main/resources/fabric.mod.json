@@ -12,6 +12,9 @@
       "com.minimals.client.MinimalClientMod"
     ]
   },
+  "mixins": [
+    "minimals.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.19.3",
     "fabric-api": "*",

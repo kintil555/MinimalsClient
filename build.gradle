@@ -19,6 +19,10 @@ dependencies {
     // No mappings line: Loom defaults to Mojang's official mappings on 26.x.
     implementation 'net.fabricmc:fabric-loader:0.19.3'
     implementation 'net.fabricmc.fabric-api:fabric-api:0.157.0+26.2'
+    // MixinExtras (@WrapOperation etc.) is bundled at runtime by fabric-loader 0.15.0+,
+    // so we only need it on the compile classpath here, not packaged into the jar.
+    compileOnly 'io.github.llamalad7:mixinextras-fabric:0.5.4'
+    annotationProcessor 'io.github.llamalad7:mixinextras-fabric:0.5.4'
 }
 
 java {

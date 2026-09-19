@@ -15,10 +15,11 @@ public class ModuleManager {
         register(new Module("HitBoxes", Module.Category.COMBAT));
 
         register(new Module("Sprint", Module.Category.MOVEMENT));
-        register(new Module("Speed", Module.Category.MOVEMENT));
+        register(new Module("Nearby Entities", Module.Category.MOVEMENT));
 
         register(new Module("Fullbright", Module.Category.VISUALS));
         register(new Module("HUD", Module.Category.VISUALS, true));
+        register(new Module("Block On Entities", Module.Category.VISUALS));
     }
 
     private ModuleManager() {

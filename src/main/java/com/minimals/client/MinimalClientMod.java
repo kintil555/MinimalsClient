@@ -1,5 +1,7 @@
 package com.minimals.client;
 
+import com.minimals.client.module.Module;
+import com.minimals.client.module.ModuleManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -14,6 +16,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import com.mojang.blaze3d.platform.InputConstants;
+
+import java.util.List;
 
 public class MinimalClientMod implements ClientModInitializer {
 
@@ -59,6 +63,14 @@ public class MinimalClientMod implements ClientModInitializer {
             while (hudToggleKey.consumeClick()) {
                 hudVisible = !hudVisible;
             }
+
+            // Sprint module: force sprint while moving forward, no double-tap needed.
+            if (ModuleManager.isEnabled("Sprint") && client.player != null) {
+                if (client.options.keyUp.isDown() && !client.player.isSprinting()
+                        && client.player.getFoodData().getFoodLevel() > 6) {
+                    client.player.setSprinting(true);
+                }
+            }
         });
     }
 
@@ -67,22 +79,32 @@ public class MinimalClientMod implements ClientModInitializer {
         Minecraft client = Minecraft.getInstance();
         Font font = client.font;
 
-        String fps = "FPS: " + client.getFps();
-        String coords = "";
-        if (client.player != null) {
-            coords = "XYZ: " + (int) client.player.getX() + " / " + (int) client.player.getY() + " / " + (int) client.player.getZ();
-        }
+        List<Module> active = ModuleManager.getAllModules().stream()
+                .filter(Module::isEnabled)
+                .toList();
 
-        int padding = 6;
-        int boxW = Math.max(font.width(fps), font.width(coords)) + padding * 2;
-        int boxH = 12 + padding * 2;
+        if (active.isEmpty()) return;
+
+        int padding = 5;
+        int lineHeight = 10;
         int x = 6;
         int y = 6;
 
-        drawRoundedBox(graphics, x, y, x + boxW, y + boxH, 8, 0x88000000);
+        int maxWidth = 0;
+        for (Module module : active) {
+            maxWidth = Math.max(maxWidth, font.width(module.getName()));
+        }
 
-        graphics.text(font, fps, x + padding, y + padding - 1, 0xFFFFFF, true);
-        graphics.text(font, coords, x + padding, y + padding + 8, 0xFFFFFF, true);
+        int boxW = maxWidth + padding * 2;
+        int boxH = active.size() * lineHeight + padding * 2 - 2;
+
+        drawRoundedBox(graphics, x, y, x + boxW, y + boxH, 6, 0x99000000);
+
+        int textY = y + padding;
+        for (Module module : active) {
+            graphics.text(font, module.getName(), x + padding, textY, 0xFFFFFF, true);
+            textY += lineHeight;
+        }
     }
 
     static void drawRoundedBox(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {
