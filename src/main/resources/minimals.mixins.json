@@ -19,7 +19,10 @@
     "ParticleCullingMixin",
     "OverlayTextureAccessor",
     "HurtColorMixin",
-    "FireOverlayMixin"
+    "FireOverlayMixin",
+    "ShulkerItemStackMixin",
+    "ShulkerTooltipMixin",
+    "ShulkerContainerScreenMixin"
   ],
   "mixins": [
     "PathNavigationMixin"

@@ -25,6 +25,7 @@ public class ModuleManager {
         register(new KeystrokeModule());
         register(new BlockOnEntitiesModule());
         register(new SnapPerspectiveModule());
+        register(new ShulkerPreviewModule());
 
         register(new OptimizationModule());
         register(new CrystalOptimizerModule());
@@ -98,6 +99,15 @@ public class ModuleManager {
             }
         }
         throw new IllegalStateException("CustomHitSoundModule is not registered");
+    }
+
+    public static ShulkerPreviewModule shulkerPreview() {
+        for (Module m : MODULES) {
+            if (m instanceof ShulkerPreviewModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("ShulkerPreviewModule is not registered");
     }
 
     public static KeystrokeModule keystrokes() {
