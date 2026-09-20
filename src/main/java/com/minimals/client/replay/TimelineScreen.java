@@ -255,6 +255,59 @@ public class TimelineScreen extends Screen {
         }
         renderVisuals(graphics, mouseX, mouseY);
         renderTimeline(graphics, mouseX, mouseY);
+        renderGameMenu(graphics, mouseX, mouseY);
+    }
+
+    // ---- in-viewport game menu (ESC) -------------------------------------------------------
+
+    private static final String[] MENU_LABELS = {"Back to Replay", "Quit Replay"};
+
+    private int menuBtnW() {
+        return 200;
+    }
+
+    private int menuBtnX() {
+        return (int) Math.round(ReplayEditorLayout.vpX() + ReplayEditorLayout.vpW() / 2.0) - menuBtnW() / 2;
+    }
+
+    private int menuBtnY(int i) {
+        int cy = (int) Math.round(ReplayEditorLayout.vpY() + ReplayEditorLayout.vpH() / 2.0);
+        return cy - 24 + i * 24;
+    }
+
+    private void renderGameMenu(GuiGraphicsExtractor g, int mx, int my) {
+        if (!ReplayView.gameMenu) {
+            return;
+        }
+        int x0 = (int) Math.round(ReplayEditorLayout.vpX());
+        int y0 = (int) Math.round(ReplayEditorLayout.vpY());
+        int x1 = (int) Math.round(ReplayEditorLayout.vpX() + ReplayEditorLayout.vpW());
+        int y1 = (int) Math.round(ReplayEditorLayout.vpY() + ReplayEditorLayout.vpH());
+        g.fill(x0, y0, x1, y1, 0x90000000);
+        String title = "Game Menu";
+        UiRenderer.text(g, title, (x0 + x1) / 2 - UiRenderer.textWidth(title) / 2, menuBtnY(0) - 20, WHITE);
+        for (int i = 0; i < MENU_LABELS.length; i++) {
+            int bx = menuBtnX();
+            int by = menuBtnY(i);
+            boolean hover = in(mx, my, bx, by, menuBtnW(), 20);
+            UiRenderer.roundedRect(g, bx, by, bx + menuBtnW(), by + 20, 3, hover ? TAB_BG_HOVER : TAB_BG);
+            UiRenderer.text(g, MENU_LABELS[i], bx + menuBtnW() / 2 - UiRenderer.textWidth(MENU_LABELS[i]) / 2, by + 6, WHITE);
+        }
+    }
+
+    private boolean clickGameMenu(int mx, int my, int button) {
+        if (button == 0) {
+            for (int i = 0; i < MENU_LABELS.length; i++) {
+                if (in(mx, my, menuBtnX(), menuBtnY(i), menuBtnW(), 20)) {
+                    ReplayView.gameMenu = false;
+                    if (i == 1) {
+                        ReplayPlayer.close();
+                    }
+                    return true;
+                }
+            }
+        }
+        return true; // modal: clicks never reach the panels or start flying
     }
 
     private void renderVisuals(GuiGraphicsExtractor g, int mx, int my) {
@@ -571,6 +624,9 @@ public class TimelineScreen extends Screen {
         int my = (int) event.y();
         int button = event.button();
 
+        if (ReplayView.gameMenu) {
+            return clickGameMenu(mx, my, button);
+        }
         if (addMenuOpen) {
             addMenuOpen = false;
             if (button == 0) {
@@ -725,6 +781,9 @@ public class TimelineScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (ReplayView.gameMenu) {
+            return true;
+        }
         int mx = (int) mouseX;
         int my = (int) mouseY;
         if (my >= tlTop()) {
@@ -746,8 +805,11 @@ public class TimelineScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
         if (key == InputConstants.KEY_ESCAPE) {
-            Minecraft.getInstance().pauseGame(false);
+            ReplayView.gameMenu = !ReplayView.gameMenu;
             return true;
+        }
+        if (ReplayView.gameMenu) {
+            return true; // menu open: swallow every other key
         }
         if (key == InputConstants.KEY_F1) {
             ReplayView.hideEditor = !ReplayView.hideEditor;

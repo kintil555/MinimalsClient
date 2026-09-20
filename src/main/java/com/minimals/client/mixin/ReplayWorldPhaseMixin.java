@@ -34,6 +34,8 @@ public abstract class ReplayWorldPhaseMixin {
     @Final
     private net.minecraft.client.renderer.state.GameRenderState gameRenderState;
 
+    private static boolean minimals$logged;
+
     private int minimals$oldW;
     private int minimals$oldH;
 
@@ -44,6 +46,12 @@ public abstract class ReplayWorldPhaseMixin {
     private void minimals$worldBegin(DeltaTracker deltaTracker, boolean advance, CallbackInfo ci) {
         if (!ReplayEditorLayout.active()) {
             return;
+        }
+        if (!minimals$logged) {
+            minimals$logged = true;
+            org.slf4j.LoggerFactory.getLogger("minimals").info("Replay viewport active: {}x{} px, area {}x{} gui",
+                    ReplayViewportTarget.pixelW(), ReplayViewportTarget.pixelH(),
+                    (int) ReplayEditorLayout.areaW(), (int) ReplayEditorLayout.areaH());
         }
         minimals$realTarget = this.mainRenderTarget;
         RenderTarget vp = ReplayViewportTarget.acquire();

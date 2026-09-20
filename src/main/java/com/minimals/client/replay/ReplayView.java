@@ -16,6 +16,8 @@ public final class ReplayView {
     public static boolean hideTimeline;
     /** F1 in the editor: hide the panels and let the world use the whole window. */
     public static boolean hideEditor;
+    /** ESC in the editor: game menu drawn inside the viewport (the world stays where it is). */
+    public static boolean gameMenu;
 
     private ReplayView() {
     }
@@ -52,6 +54,7 @@ public final class ReplayView {
         hideHud = false;
         hideTimeline = false;
         hideEditor = false;
+        gameMenu = false;
         ReplayVisuals.reset();
         ReplayEditorState.reset();
     }
