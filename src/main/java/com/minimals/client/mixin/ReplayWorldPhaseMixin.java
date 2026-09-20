@@ -55,7 +55,7 @@ public abstract class ReplayWorldPhaseMixin {
         ws.width = vp.width;
         ws.height = vp.height;
         RenderSystem.getDevice().createCommandEncoder()
-                .clearColorAndDepthTextures(vp.getColorTexture(), 0xFF000000, vp.getDepthTexture(), 0.0);
+                .clearColorAndDepthTextures(vp.getColorTexture(), new org.joml.Vector4f(0.0F, 0.0F, 0.0F, 1.0F), vp.getDepthTexture(), 0.0);
     }
 
     // After entity outline + post effect, before the GUI clears depth and draws.
