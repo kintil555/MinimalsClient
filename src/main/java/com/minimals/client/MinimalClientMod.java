@@ -2,6 +2,8 @@ package com.minimals.client;
 
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
+import com.minimals.client.spectate.MenuChoiceScreen;
+import com.minimals.client.spectate.SpectateManager;
 import com.minimals.client.ui.hud.ArraylistElement;
 import com.minimals.client.ui.hud.HudEditorScreen;
 import com.minimals.client.ui.hud.HudElement;
@@ -98,6 +100,7 @@ public class MinimalClientMod implements ClientModInitializer {
             // own rules: sneaking, using an item, riding, shallow water, low food, ...
             // Runs first so the early returns below can never leave the key stuck down.
             tickAutoSprint(client);
+            SpectateManager.tick(client);
 
             if (MenuScreen.isTypingInMenu()) {
                 // Drain queued presses so they don't fire the moment the text field loses focus.
@@ -106,9 +109,11 @@ public class MinimalClientMod implements ClientModInitializer {
                 return;
             }
             while (menuKey.consumeClick()) {
-                if (client.gui.screen() == null) {
-                    client.gui.setScreen(new MenuScreen());
-                } else if (client.gui.screen() instanceof MenuScreen) {
+                Screen open = client.gui.screen();
+                if (open == null) {
+                    client.gui.setScreen(new MenuChoiceScreen());
+                } else if (open instanceof MenuScreen || open instanceof MenuChoiceScreen
+                        || open instanceof com.minimals.client.spectate.SpectateScreen) {
                     client.gui.setScreen((Screen) null);
                 }
             }
@@ -219,6 +224,7 @@ public class MinimalClientMod implements ClientModInitializer {
     }
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
+        renderSpectateHint(graphics);
         if (!hudVisible) return;
         WaypointRenderer.render(graphics);
         // While the HUD editor is open it draws every element itself (smoothly, following the
@@ -230,6 +236,33 @@ public class MinimalClientMod implements ClientModInitializer {
                 element.render(graphics, deltaTracker, element.getX(graphics.guiWidth()), element.getY(graphics.guiHeight()));
             }
         }
+    }
+
+    /** Small banner while spectating: who, loading state, and how to leave. */
+    private static void renderSpectateHint(GuiGraphicsExtractor graphics) {
+        if (!SpectateManager.isSpectating()) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        String name = "player";
+        if (mc.level != null) {
+            var target = SpectateManager.find(mc.level, SpectateManager.targetId());
+            if (target != null) {
+                name = target.getName().getString();
+            }
+        }
+        String text = SpectateManager.isLoading()
+                ? "Loading chunks for " + name + "..."
+                : "Spectating " + name;
+        String hint = "Press Q to exit";
+        int w = Math.max(com.minimals.client.ui.UiRenderer.textWidth(text),
+                com.minimals.client.ui.UiRenderer.textWidth(hint)) + 16;
+        int x = (graphics.guiWidth() - w) / 2;
+        drawRoundedBox(graphics, x, 8, x + w, 34, 5, 0xB0141417);
+        com.minimals.client.ui.UiRenderer.text(graphics, text,
+                x + (w - com.minimals.client.ui.UiRenderer.textWidth(text)) / 2, 12, 0xFFE8E8ED);
+        com.minimals.client.ui.UiRenderer.text(graphics, hint,
+                x + (w - com.minimals.client.ui.UiRenderer.textWidth(hint)) / 2, 23, 0xFF9A9AA5);
     }
 
     public static void drawRoundedBox(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {

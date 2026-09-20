@@ -93,6 +93,11 @@ public class MenuScreen extends Screen {
         super(Component.literal("Minimals"));
     }
 
+    /** Factory for other packages (the RShift choice screen) since the constructor is protected. */
+    public static MenuScreen create() {
+        return new MenuScreen();
+    }
+
     private int panelX() {
         return (this.width - PANEL_W) / 2;
     }
