@@ -49,5 +49,7 @@ public final class ReplayView {
         fov = 70.0;
         hideHud = false;
         hideTimeline = false;
+        ReplayVisuals.reset();
+        ReplayEditorState.reset();
     }
 }
