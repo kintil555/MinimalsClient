@@ -13,6 +13,8 @@ public final class ReplayEditorLayout {
 
     public static final int HEADER_H = 16;
     public static final int RULER_H = 16;
+    /** Tall black strip with the transport controls, as in the mockup (about 6% of the screen). */
+    public static final int TRANSPORT_H = 30;
     public static final int ROW_H = 16;
     public static final int ADD_H = 14;
     public static final int VIS_W = 150;
@@ -29,7 +31,7 @@ public final class ReplayEditorLayout {
         if (ReplayEditorState.timelineCollapsed()) {
             return HEADER_H;
         }
-        return HEADER_H + RULER_H + ReplayEditorState.tracks().size() * ROW_H + 3 + ADD_H + 4;
+        return HEADER_H + TRANSPORT_H + RULER_H + ReplayEditorState.tracks().size() * ROW_H + 3 + ADD_H + 4;
     }
 
     public static int visualsWidth(int tabWidthWhenCollapsed) {

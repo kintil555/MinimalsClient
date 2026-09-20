@@ -7,6 +7,7 @@ import com.minimals.client.ui.UiRenderer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -32,6 +33,7 @@ public class TimelineScreen extends Screen {
     // ---- layout ---------------------------------------------------------------------------
     private static final int HEADER_H = 16;
     private static final int RULER_H = 16;
+    private static final int TRANSPORT_H = ReplayEditorLayout.TRANSPORT_H;
     private static final int ROW_H = 16;
     private static final int LABEL_W = 130;
     private static final int VIS_W = 150;
@@ -40,7 +42,6 @@ public class TimelineScreen extends Screen {
     private static final int CHECK_H = 16;
     private static final int SLIDER_H = 14;
     private static final int SIZING_H = 18;
-    private static final int TRANSPORT_CELL_W = (LABEL_W - 12) / 5;
     private static final int TRACK_BTN = 12;
 
     private static final double[] SPEEDS = {0.25, 0.5, 1.0, 2.0, 4.0, 8.0};
@@ -112,8 +113,12 @@ public class TimelineScreen extends Screen {
         return height - tlHeight();
     }
 
-    private int rulerTop() {
+    private int transportTop() {
         return tlTop() + HEADER_H;
+    }
+
+    private int rulerTop() {
+        return transportTop() + TRANSPORT_H;
     }
 
     private int rowsTop() {
@@ -154,6 +159,38 @@ public class TimelineScreen extends Screen {
 
     private int speedX() {
         return width - 6 - speedW();
+    }
+
+    // Transport controls, proportions measured from the mockup (strip height = 1.0):
+    // big triangles ~0.75 wide, red play pill ~1.83 wide, gaps ~0.4 / ~0.5 between them.
+    private static final int T_SIDE_W = 22;   // big prev / next triangle box
+    private static final int T_PILL_W = 54;   // red play pill
+    private static final int T_GAP = 14;
+    private static final int T_SMALL_W = 14;  // slow down / fast forward (kept from Flashback)
+
+    /** x of the first control; the group is placed at the start of the track area. */
+    private int transportX0() {
+        return LABEL_W + 26;
+    }
+
+    private int prevX() {
+        return transportX0() + T_SMALL_W + T_GAP;
+    }
+
+    private int playX() {
+        return prevX() + T_SIDE_W + T_GAP;
+    }
+
+    private int nextX() {
+        return playX() + T_PILL_W + T_GAP;
+    }
+
+    private int slowX() {
+        return transportX0();
+    }
+
+    private int fastX() {
+        return nextX() + T_SIDE_W + T_GAP;
     }
 
     private int tickAt(double mouseX) {
@@ -261,59 +298,6 @@ public class TimelineScreen extends Screen {
         }
         renderVisuals(graphics, mouseX, mouseY);
         renderTimeline(graphics, mouseX, mouseY);
-        renderGameMenu(graphics, mouseX, mouseY);
-    }
-
-    // ---- in-viewport game menu (ESC) -------------------------------------------------------
-
-    private static final String[] MENU_LABELS = {"Back to Replay", "Quit Replay"};
-
-    private int menuBtnW() {
-        return 200;
-    }
-
-    private int menuBtnX() {
-        return (int) Math.round(ReplayEditorLayout.vpX() + ReplayEditorLayout.vpW() / 2.0) - menuBtnW() / 2;
-    }
-
-    private int menuBtnY(int i) {
-        int cy = (int) Math.round(ReplayEditorLayout.vpY() + ReplayEditorLayout.vpH() / 2.0);
-        return cy - 24 + i * 24;
-    }
-
-    private void renderGameMenu(GuiGraphicsExtractor g, int mx, int my) {
-        if (!ReplayView.gameMenu) {
-            return;
-        }
-        int x0 = (int) Math.round(ReplayEditorLayout.vpX());
-        int y0 = (int) Math.round(ReplayEditorLayout.vpY());
-        int x1 = (int) Math.round(ReplayEditorLayout.vpX() + ReplayEditorLayout.vpW());
-        int y1 = (int) Math.round(ReplayEditorLayout.vpY() + ReplayEditorLayout.vpH());
-        g.fill(x0, y0, x1, y1, 0x90000000);
-        String title = "Game Menu";
-        UiRenderer.text(g, title, (x0 + x1) / 2 - UiRenderer.textWidth(title) / 2, menuBtnY(0) - 20, WHITE);
-        for (int i = 0; i < MENU_LABELS.length; i++) {
-            int bx = menuBtnX();
-            int by = menuBtnY(i);
-            boolean hover = in(mx, my, bx, by, menuBtnW(), 20);
-            UiRenderer.roundedRect(g, bx, by, bx + menuBtnW(), by + 20, 3, hover ? TAB_BG_HOVER : TAB_BG);
-            UiRenderer.text(g, MENU_LABELS[i], bx + menuBtnW() / 2 - UiRenderer.textWidth(MENU_LABELS[i]) / 2, by + 6, WHITE);
-        }
-    }
-
-    private boolean clickGameMenu(int mx, int my, int button) {
-        if (button == 0) {
-            for (int i = 0; i < MENU_LABELS.length; i++) {
-                if (in(mx, my, menuBtnX(), menuBtnY(i), menuBtnW(), 20)) {
-                    ReplayView.gameMenu = false;
-                    if (i == 1) {
-                        ReplayPlayer.close();
-                    }
-                    return true;
-                }
-            }
-        }
-        return true; // modal: clicks never reach the panels or start flying
     }
 
     private void renderVisuals(GuiGraphicsExtractor g, int mx, int my) {
@@ -400,10 +384,12 @@ public class TimelineScreen extends Screen {
         int shown = scrubbing ? scrubTick : ReplayPlayer.positionTicks();
 
         g.fill(0, top, width, height, TL_BG);
-        g.fill(0, rulerTop(), LABEL_W, height, TL_SIDE);
+        // Label column (dark green) starts right under the header and runs beside the black
+        // transport strip, exactly like the mockup where the strip only spans the track side.
+        g.fill(0, transportTop(), LABEL_W, height, TL_SIDE);
         g.fill(0, top, width, top + 1, DIVIDER);
         // Header + transport strip are black, like the mockup.
-        g.fill(LABEL_W, top, width, rulerTop() + RULER_H, BG);
+        g.fill(LABEL_W, top, width, rulerTop(), BG);
         g.fill(0, top, LABEL_W, top + HEADER_H, BG);
         int tabW = drawTab(g, 6, top + 2, "Timeline", !collapsed, mx, my);
 
@@ -438,19 +424,7 @@ public class TimelineScreen extends Screen {
 
         g.fill(0, rulerTop + RULER_H - 1, width, rulerTop + RULER_H, LINE);
 
-        // Transport row.
-        for (int i = 0; i < 5; i++) {
-            int cellX = 6 + i * TRANSPORT_CELL_W;
-            boolean hov = in(mx, my, cellX, rulerTop, TRANSPORT_CELL_W, RULER_H);
-            if (i == 2) {
-                // Play/pause: red rounded pill with a white glyph (mockup).
-                UiRenderer.roundedRect(g, cellX - 1, rulerTop + 1, cellX + TRANSPORT_CELL_W + 1, rulerTop + RULER_H - 1, 4,
-                        hov ? 0xFFFF3A3A : PLAY_RED);
-                drawTransportIcon(g, i, cellX, rulerTop + RULER_H / 2, WHITE);
-            } else {
-                drawTransportIcon(g, i, cellX, rulerTop + RULER_H / 2, hov ? ICON_HOVER : WHITE);
-            }
-        }
+        drawTransport(g, mx, my);
 
         drawRuler(g, rulerTop);
 
@@ -588,33 +562,46 @@ public class TimelineScreen extends Screen {
         }
     }
 
-    private void drawTransportIcon(GuiGraphicsExtractor g, int index, int cellX, int cy, int c) {
-        int x = cellX + (TRANSPORT_CELL_W - 12) / 2;
-        switch (index) {
-            case 0 -> {
-                g.fill(x, cy - 5, x + 2, cy + 5, c);
-                triLeft(g, x + 3, cy, 8, 10, c);
-            }
-            case 1 -> {
-                triLeft(g, x, cy, 6, 10, c);
-                triLeft(g, x + 6, cy, 6, 10, c);
-            }
-            case 2 -> {
-                if (ReplayPlayer.isPaused()) {
-                    triRight(g, x + 1, cy, 9, 10, c);
-                } else {
-                    g.fill(x + 1, cy - 5, x + 4, cy + 5, c);
-                    g.fill(x + 6, cy - 5, x + 9, cy + 5, c);
-                }
-            }
-            case 3 -> {
-                triRight(g, x, cy, 6, 10, c);
-                triRight(g, x + 6, cy, 6, 10, c);
-            }
-            default -> {
-                triRight(g, x, cy, 8, 10, c);
-                g.fill(x + 9, cy - 5, x + 11, cy + 5, c);
-            }
+    private void drawTransport(GuiGraphicsExtractor g, int mx, int my) {
+        int top = transportTop();
+        int cy = top + TRANSPORT_H / 2;
+        int th = TRANSPORT_H - 10;         // big triangle height
+        int ty = cy - th / 2;
+
+        // Slow down / fast forward: Flashback's speed steps, small and dim so the big three lead.
+        drawSmallSpeed(g, slowX(), cy, true, in(mx, my, slowX() - 2, top, T_SMALL_W + 4, TRANSPORT_H));
+        drawSmallSpeed(g, fastX(), cy, false, in(mx, my, fastX() - 2, top, T_SMALL_W + 4, TRANSPORT_H));
+
+        // Previous: one big solid triangle, no bar, no doubling.
+        boolean hp = in(mx, my, prevX() - 3, top, T_SIDE_W + 6, TRANSPORT_H);
+        triLeft(g, prevX(), cy, T_SIDE_W, th, hp ? ICON_HOVER : WHITE);
+
+        // Play / pause: wide red pill with a small white glyph in the middle.
+        boolean hpl = in(mx, my, playX(), top + 1, T_PILL_W, TRANSPORT_H - 2);
+        UiRenderer.roundedRect(g, playX(), top + 1, playX() + T_PILL_W, top + TRANSPORT_H - 1, 6,
+                hpl ? 0xFFFF3A3A : PLAY_RED);
+        int gx = playX() + T_PILL_W / 2;
+        if (ReplayPlayer.isPaused()) {
+            triRight(g, gx - 5, cy, 11, 14, WHITE);
+        } else {
+            g.fill(gx - 6, cy - 7, gx - 2, cy + 7, WHITE);
+            g.fill(gx + 2, cy - 7, gx + 6, cy + 7, WHITE);
+        }
+
+        // Next.
+        boolean hn = in(mx, my, nextX() - 3, top, T_SIDE_W + 6, TRANSPORT_H);
+        triRight(g, nextX(), cy, T_SIDE_W, th, hn ? ICON_HOVER : WHITE);
+    }
+
+    private static void drawSmallSpeed(GuiGraphicsExtractor g, int x, int cy, boolean slow, boolean hover) {
+        int c = hover ? ICON_HOVER : TEXT_DIM;
+        int half = T_SMALL_W / 2;
+        if (slow) {
+            triLeft(g, x, cy, half, 10, c);
+            triLeft(g, x + half, cy, half, 10, c);
+        } else {
+            triRight(g, x, cy, half, 10, c);
+            triRight(g, x + half, cy, half, 10, c);
         }
     }
 
@@ -647,9 +634,6 @@ public class TimelineScreen extends Screen {
         int my = (int) event.y();
         int button = event.button();
 
-        if (ReplayView.gameMenu) {
-            return clickGameMenu(mx, my, button);
-        }
         if (addMenuOpen) {
             addMenuOpen = false;
             if (button == 0) {
@@ -703,11 +687,13 @@ public class TimelineScreen extends Screen {
             return true;
         }
 
+        if (my >= transportTop() && my < rulerTop()) {
+            clickTransport(mx);
+            return true;
+        }
         int rulerTop = rulerTop();
         if (my >= rulerTop && my < rowsTop()) {
-            if (mx >= 6 && mx < 6 + 5 * TRANSPORT_CELL_W) {
-                transport((mx - 6) / TRANSPORT_CELL_W);
-            } else if (mx >= trackX1() - 6) {
+            if (mx >= trackX1() - 6) {
                 scrubbing = true;
                 scrubTick = tickAt(mx);
             }
@@ -747,13 +733,17 @@ public class TimelineScreen extends Screen {
         return true;
     }
 
-    private static void transport(int index) {
-        switch (index) {
-            case 0 -> ReplayPlayer.seek(0);
-            case 1 -> ReplayPlayer.seek(ReplayPlayer.positionTicks() - 100);
-            case 2 -> ReplayPlayer.setPaused(!ReplayPlayer.isPaused());
-            case 3 -> ReplayPlayer.seek(ReplayPlayer.positionTicks() + 100);
-            default -> ReplayPlayer.seek(ReplayPlayer.totalTicks());
+    private void clickTransport(int mx) {
+        if (mx >= prevX() - 3 && mx < prevX() + T_SIDE_W + 3) {
+            ReplayPlayer.seek(ReplayPlayer.positionTicks() - 100);
+        } else if (mx >= playX() && mx < playX() + T_PILL_W) {
+            ReplayPlayer.setPaused(!ReplayPlayer.isPaused());
+        } else if (mx >= nextX() - 3 && mx < nextX() + T_SIDE_W + 3) {
+            ReplayPlayer.seek(ReplayPlayer.positionTicks() + 100);
+        } else if (mx >= slowX() - 2 && mx < slowX() + T_SMALL_W + 2) {
+            cycleSpeed(-1);
+        } else if (mx >= fastX() - 2 && mx < fastX() + T_SMALL_W + 2) {
+            cycleSpeed(1);
         }
     }
 
@@ -804,9 +794,6 @@ public class TimelineScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (ReplayView.gameMenu) {
-            return true;
-        }
         int mx = (int) mouseX;
         int my = (int) mouseY;
         if (my >= tlTop()) {
@@ -828,11 +815,13 @@ public class TimelineScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
         if (key == InputConstants.KEY_ESCAPE) {
-            ReplayView.gameMenu = !ReplayView.gameMenu;
+            // The real vanilla pause screen (Back to Game / Options / Disconnect...). Opened
+            // directly: Minecraft.pauseGame -> Gui.setPauseScreen only acts when no screen is open,
+            // and this editor is one. Closing it (Back to Game or ESC) leaves no screen, and
+            // ReplayPlayer.reopenEditorIfNeeded brings the editor back.
+            addMenuOpen = false;
+            Minecraft.getInstance().gui.setScreen(new PauseScreen(true));
             return true;
-        }
-        if (ReplayView.gameMenu) {
-            return true; // menu open: swallow every other key
         }
         if (key == InputConstants.KEY_F1) {
             ReplayView.hideEditor = !ReplayView.hideEditor;

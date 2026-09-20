@@ -241,6 +241,21 @@ public final class ReplayPlayer {
         }
     }
 
+    /**
+     * The user chose Disconnect on the vanilla pause screen: vanilla is already leaving the world
+     * and will show the title screen, so only the replay's own state is released here (calling
+     * close() would start a second disconnect and a second screen change).
+     */
+    public static void closeAfterUserDisconnect() {
+        active = false;
+        shutdownConnection();
+        FRAMES.clear();
+        ReplayRemotePlayer.clear();
+        ReplayViewportTarget.close();
+        startPose = null;
+        keptPose = null;
+    }
+
     private static void shutdownConnection() {
         Connection c = connection;
         connection = null;
@@ -326,15 +341,21 @@ public final class ReplayPlayer {
 
     /**
      * The editor is the resting state of a replay: whenever no screen is open and the camera is
-     * not being flown (e.g. the pause screen was closed with ESC) the editor comes back. Ticks
-     * while the mouse is grabbed are skipped so flying is not interrupted.
+     * not being flown (e.g. the vanilla pause screen was closed) the editor comes back.
+     *
+     * Vanilla's "Back to Game" closes the pause screen and then grabs the mouse. Flying is only
+     * ever started by holding the right button, so a grabbed mouse while ReplayFlyCamera is not
+     * flying is that leftover grab: it is released here so the cursor is free for the editor.
      */
     public static void reopenEditorIfNeeded(Minecraft mc) {
         if (!active || !isInWorld() || !timelineShown) {
             return;
         }
-        if (mc.gui.screen() != null || ReplayFlyCamera.isFlying() || mc.mouseHandler.isMouseGrabbed()) {
+        if (mc.gui.screen() != null || ReplayFlyCamera.isFlying()) {
             return;
+        }
+        if (mc.mouseHandler.isMouseGrabbed()) {
+            mc.mouseHandler.releaseMouse();
         }
         mc.gui.setScreen(new TimelineScreen());
     }
