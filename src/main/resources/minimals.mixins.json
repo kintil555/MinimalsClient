@@ -20,6 +20,7 @@
     "OverlayTextureAccessor",
     "HurtColorMixin",
     "FireOverlayMixin",
+    "PostEffectMixin",
     "ShulkerItemStackMixin",
     "ShulkerTooltipMixin",
     "ShulkerContainerScreenMixin",

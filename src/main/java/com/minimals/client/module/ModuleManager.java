@@ -29,6 +29,7 @@ public class ModuleManager {
         register(new ShulkerPreviewModule());
         register(new WailaModule());
         register(new WaypointModule());
+        register(new PostEffectModule());
 
         register(new OptimizationModule());
         register(new CrystalOptimizerModule());
@@ -57,6 +58,15 @@ public class ModuleManager {
             }
         }
         throw new IllegalStateException("BlockOnEntitiesModule is not registered");
+    }
+
+    public static PostEffectModule postEffect() {
+        for (Module m : MODULES) {
+            if (m instanceof PostEffectModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("PostEffectModule is not registered");
     }
 
     public static OptimizationModule optimization() {
