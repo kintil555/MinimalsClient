@@ -6,7 +6,9 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
+import net.minecraft.world.item.ItemStack;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -20,12 +22,23 @@ import java.io.IOException;
  * <pre>
  * profile : byte 0, GameProfile (vanilla codec, textures included)
  * sample  : byte 1, 3 x double xyz, 3 x float yRot xRot headRot, byte flags
+ * state   : byte 2, byte skinLayers (player model customisation mask), byte slotMask,
+ *           then one ItemStack (vanilla OPTIONAL_STREAM_CODEC) per bit set in slotMask
  * </pre>
+ * The state frame is only written when something changed, like Flashback does for the local
+ * player's entity data and equipment.
  */
 public final class ReplayLocalTrack {
 
     public static final byte KIND_PROFILE = 0;
     public static final byte KIND_SAMPLE = 1;
+    public static final byte KIND_STATE = 2;
+
+    /** Slots tracked by the state frame, bit index = position in this array. */
+    public static final EquipmentSlot[] SLOTS = {
+            EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND, EquipmentSlot.HEAD,
+            EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET
+    };
 
     public static final int SNEAK = 1;
     public static final int SPRINT = 2;
@@ -36,6 +49,10 @@ public final class ReplayLocalTrack {
         public boolean has(int flag) {
             return (flags & flag) != 0;
         }
+    }
+
+    /** Skin layers + the equipment slots that were present in a state frame. */
+    public record State(int skinLayers, int slotMask, ItemStack[] items) {
     }
 
     private ReplayLocalTrack() {
@@ -101,6 +118,77 @@ public final class ReplayLocalTrack {
                     in.readFloat(), in.readFloat(), in.readFloat(), in.readUnsignedByte());
         } catch (IOException e) {
             return null;
+        }
+    }
+
+    /** Current skin layer mask of the player (jacket, sleeves, pants, hat, cape). */
+    public static int skinLayers(LocalPlayer p) {
+        int mask = 0;
+        for (net.minecraft.world.entity.player.PlayerModelPart part : net.minecraft.world.entity.player.PlayerModelPart.values()) {
+            if (p.isModelPartShown(part)) {
+                mask |= part.getMask();
+            }
+        }
+        return mask;
+    }
+
+    public static ItemStack[] readEquipment(LocalPlayer p) {
+        ItemStack[] items = new ItemStack[SLOTS.length];
+        for (int i = 0; i < SLOTS.length; i++) {
+            items[i] = p.getItemBySlot(SLOTS[i]).copy();
+        }
+        return items;
+    }
+
+    public static boolean sameEquipment(ItemStack[] a, ItemStack[] b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        for (int i = 0; i < a.length; i++) {
+            if (!ItemStack.matches(a[i], b[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static byte[] encodeState(int skinLayers, ItemStack[] items, RegistryAccess access) {
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
+        buf.writeByte(KIND_STATE);
+        buf.writeByte(skinLayers);
+        int mask = 0;
+        for (int i = 0; i < items.length; i++) {
+            if (!items[i].isEmpty()) {
+                mask |= 1 << i;
+            }
+        }
+        buf.writeByte(mask);
+        for (int i = 0; i < items.length; i++) {
+            if ((mask & (1 << i)) != 0) {
+                ItemStack.OPTIONAL_STREAM_CODEC.encode(buf, items[i]);
+            }
+        }
+        byte[] out = new byte[buf.readableBytes()];
+        buf.readBytes(out);
+        buf.release();
+        return out;
+    }
+
+    public static State decodeState(byte[] data, RegistryAccess access) {
+        RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.wrappedBuffer(data), access);
+        try {
+            buf.readByte();
+            int layers = buf.readUnsignedByte();
+            int mask = buf.readUnsignedByte();
+            ItemStack[] items = new ItemStack[SLOTS.length];
+            for (int i = 0; i < items.length; i++) {
+                items[i] = (mask & (1 << i)) != 0 ? ItemStack.OPTIONAL_STREAM_CODEC.decode(buf) : ItemStack.EMPTY;
+            }
+            return new State(layers, mask, items);
+        } catch (RuntimeException e) {
+            return null;
+        } finally {
+            buf.release();
         }
     }
 }

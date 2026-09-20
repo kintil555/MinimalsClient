@@ -83,6 +83,8 @@ public final class ReplayRecorder {
 
     /** Last LocalPlayer whose profile frame was written (a new object = respawn / new world). */
     private static java.lang.ref.WeakReference<net.minecraft.client.player.LocalPlayer> sampledPlayer;
+    private static int lastSkinLayers = -1;
+    private static net.minecraft.world.item.ItemStack[] lastEquipment;
 
     /**
      * Packets never describe the recording player to itself, so its movement is stored separately:
@@ -99,8 +101,20 @@ public final class ReplayRecorder {
         try {
             if (sampledPlayer == null || sampledPlayer.get() != player) {
                 sampledPlayer = new java.lang.ref.WeakReference<>(player);
+                lastSkinLayers = -1;
+                lastEquipment = null;
                 q.add(new ReplayFormat.Frame(ReplayFormat.PROTO_LOCAL, tick,
                         ReplayLocalTrack.encodeProfile(player, mc.getGameProfile(), mc.level.registryAccess())));
+            }
+            // Skin layers + equipment only when they change (Flashback does the same for the
+            // local player's entity data / equipment).
+            int layers = ReplayLocalTrack.skinLayers(player);
+            var gear = ReplayLocalTrack.readEquipment(player);
+            if (layers != lastSkinLayers || !ReplayLocalTrack.sameEquipment(lastEquipment, gear)) {
+                lastSkinLayers = layers;
+                lastEquipment = gear;
+                q.add(new ReplayFormat.Frame(ReplayFormat.PROTO_LOCAL, tick,
+                        ReplayLocalTrack.encodeState(layers, gear, mc.level.registryAccess())));
             }
             q.add(new ReplayFormat.Frame(ReplayFormat.PROTO_LOCAL, tick, ReplayLocalTrack.encodeSample(player)));
         } catch (RuntimeException e) {

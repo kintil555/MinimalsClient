@@ -8,6 +8,7 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.RemotePlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.phys.Vec3;
 
@@ -36,8 +37,22 @@ public final class ReplayRemotePlayer {
     private static boolean latestFresh;
     private static boolean wasSwinging;
 
+    private static ReplayLocalTrack.State state;
+    private static boolean stateDirty;
+    private static boolean hasLast;
+
     private static RemotePlayer entity;
     private static UUID fakeId;
+
+    /** Skin layer bitmask (PlayerModelPart.getMask()) of the recorded player; -1 = unknown. */
+    public static int skinLayers() {
+        return state == null ? -1 : state.skinLayers();
+    }
+
+    /** True for the entity that stands in for the recorded player. */
+    public static boolean isRecordedPlayer(Entity e) {
+        return e != null && entity != null && e == entity;
+    }
 
     private ReplayRemotePlayer() {
     }
@@ -62,6 +77,9 @@ public final class ReplayRemotePlayer {
         latest = null;
         latestFresh = false;
         wasSwinging = false;
+        state = null;
+        stateDirty = false;
+        hasLast = false;
         entity = null;
         fakeId = null;
     }
@@ -80,6 +98,12 @@ public final class ReplayRemotePlayer {
             if (data[0] == ReplayLocalTrack.KIND_PROFILE) {
                 profileBytes = data;
                 profileChanged = true;
+            } else if (data[0] == ReplayLocalTrack.KIND_STATE) {
+                ReplayLocalTrack.State st = ReplayLocalTrack.decodeState(data, level.registryAccess());
+                if (st != null) {
+                    state = st;
+                    stateDirty = true;
+                }
             } else {
                 ReplayLocalTrack.Sample s = ReplayLocalTrack.decodeSample(data);
                 if (s != null) {
@@ -97,11 +121,25 @@ public final class ReplayRemotePlayer {
                 return;
             }
         }
+        if (stateDirty) {
+            stateDirty = false;
+            applyState(entity);
+        }
         if (!latestFresh) {
             return;
         }
         latestFresh = false;
         apply(entity, latest);
+    }
+
+    private static void applyState(RemotePlayer p) {
+        if (state == null) {
+            return;
+        }
+        for (int i = 0; i < ReplayLocalTrack.SLOTS.length; i++) {
+            EquipmentSlot slot = ReplayLocalTrack.SLOTS[i];
+            p.setItemSlot(slot, state.items()[i].copy());
+        }
     }
 
     private static void spawn(Minecraft mc, ClientLevel level) {
@@ -130,6 +168,8 @@ public final class ReplayRemotePlayer {
         level.addEntity(p);
         entity = p;
         wasSwinging = false;
+        hasLast = false;
+        applyState(p);
     }
 
     private static void apply(RemotePlayer p, ReplayLocalTrack.Sample s) {

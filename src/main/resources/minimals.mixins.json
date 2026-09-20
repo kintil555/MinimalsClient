@@ -36,6 +36,10 @@
     "ReplayCameraAspectMixin",
     "ReplayBobMixin",
     "ReplayLocalPacketsMixin",
+    "ReplayRemotePlayerMixin",
+    "ReplaySkinLayersMixin",
+    "ReplayPlayerInfoMixin",
+    "ReplayPlayerInfoFallbackMixin",
     "ClientPacketListenerAccessor",
     "GuiGraphicsExtractorInvoker"
   ],
