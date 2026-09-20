@@ -297,6 +297,21 @@ public final class ReplayPlayer {
 
     // ---- per-tick pump --------------------------------------------------------------------
 
+    /**
+     * The editor is the resting state of a replay: whenever no screen is open and the camera is
+     * not being flown (e.g. the pause screen was closed with ESC) the editor comes back. Ticks
+     * while the mouse is grabbed are skipped so flying is not interrupted.
+     */
+    public static void reopenEditorIfNeeded(Minecraft mc) {
+        if (!active || !isInWorld() || !timelineShown) {
+            return;
+        }
+        if (mc.gui.screen() != null || ReplayFlyCamera.isFlying() || mc.mouseHandler.isMouseGrabbed()) {
+            return;
+        }
+        mc.gui.setScreen(new TimelineScreen());
+    }
+
     /** Called from END_CLIENT_TICK. */
     public static void tick() {
         if (!active) {

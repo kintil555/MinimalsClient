@@ -1,6 +1,7 @@
 package com.minimals.client.replay;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Player;
@@ -10,7 +11,7 @@ import org.lwjgl.glfw.GLFW;
 /**
  * Spectator-style free camera for replays, active ONLY while the right mouse button is held.
  *
- * While held: the cursor is grabbed and the mouse turns the camera, and W/A/S/D + Space/Shift fly
+ * While held: the mouse is grabbed (vanilla) and turns the camera, and W/A/S/D + Space/Shift fly
  * it (Ctrl = faster). When released the cursor is free again so the timeline bar can be used.
  *
  * Movement is applied to the local player's position directly. In a replay the player is a
@@ -25,9 +26,6 @@ public final class ReplayFlyCamera {
     private static final double FAST_MULTIPLIER = 3.0;
 
     private static boolean flying;
-    /** Last cursor position while the cursor is captured, to turn raw movement into rotation. */
-    private static double lastX;
-    private static double lastY;
 
     private ReplayFlyCamera() {
     }
@@ -39,33 +37,37 @@ public final class ReplayFlyCamera {
     /**
      * Right button went down over the world: start flying.
      *
-     * MouseHandler.grabMouse() would also close the open screen, so the timeline bar would vanish
-     * and never see the button release. The cursor is captured through the same GLFW call it uses
-     * (InputConstants.grabOrReleaseMouse) and the look delta is read here instead.
+     * The editor screen is closed and the mouse is grabbed the vanilla way. That makes vanilla do
+     * everything for us: MouseHandler.turnPlayer rotates the camera (the old hand-rolled look read
+     * glfwGetCursorPos, which does not move while the cursor is disabled, so the camera never
+     * turned), the crosshair appears because no screen is open, and ESC opens the pause screen.
      */
     public static void begin(Minecraft mc) {
         if (flying || !ReplayPlayer.isInWorld()) {
             return;
         }
-        flying = true;
-        var window = mc.getWindow();
-        double[] x = new double[1];
-        double[] y = new double[1];
-        GLFW.glfwGetCursorPos(window.handle(), x, y);
-        InputConstants.grabOrReleaseMouse(window, InputConstants.CURSOR_DISABLED, x[0], y[0]);
-        lastX = x[0];
-        lastY = y[0];
+        // grabMouse() also closes the open screen, whose removed() would call end(): the flag stays
+        // off until both are done so that callback is a no-op.
+        mc.gui.setScreen((Screen) null);
+        mc.mouseHandler.grabMouse();
+        flying = mc.mouseHandler.isMouseGrabbed();
     }
 
-    /** Right button released (or the replay ended): give the cursor back at the screen centre. */
+    /**
+     * Right button released, the camera can no longer be flown, or the replay ended. Frees the
+     * cursor and (unless the replay is over or another screen took over) reopens the editor.
+     */
     public static void end(Minecraft mc) {
         if (!flying) {
             return;
         }
         flying = false;
-        var window = mc.getWindow();
-        InputConstants.grabOrReleaseMouse(window, InputConstants.CURSOR_NORMAL,
-                window.getScreenWidth() / 2.0, window.getScreenHeight() / 2.0);
+        if (mc.mouseHandler.isMouseGrabbed()) {
+            mc.mouseHandler.releaseMouse();
+        }
+        if (ReplayPlayer.isInWorld() && mc.gui.screen() == null) {
+            mc.gui.setScreen(new TimelineScreen());
+        }
     }
 
     /**
@@ -77,7 +79,17 @@ public final class ReplayFlyCamera {
             return;
         }
         Player player = mc.player;
-        if (player == null || !ReplayPlayer.isInWorld() || !isRightDown(mc)) {
+        if (player == null || !ReplayPlayer.isInWorld()) {
+            flying = false;
+            return;
+        }
+        if (mc.gui.screen() != null) {
+            // ESC opened the pause screen (or something else): leave fly mode without reopening
+            // the editor on top of it. The editor comes back once that screen closes.
+            flying = false;
+            return;
+        }
+        if (!isRightDown(mc)) {
             end(mc);
             return;
         }
@@ -117,36 +129,6 @@ public final class ReplayFlyCamera {
         player.setOldPosAndRot();
         player.setPos(next.x, next.y, next.z);
         player.setDeltaMovement(Vec3.ZERO);
-    }
-
-    /**
-     * Turns the camera by the cursor movement since the last frame, with vanilla's sensitivity
-     * curve. Called once per rendered frame (see ReplayLookMixin) so rotation stays smooth; the
-     * 20 Hz client tick is only used for movement.
-     */
-    public static void lookFrame(Minecraft mc) {
-        Player player = mc.player;
-        if (!flying || player == null) {
-            return;
-        }
-        double[] x = new double[1];
-        double[] y = new double[1];
-        GLFW.glfwGetCursorPos(mc.getWindow().handle(), x, y);
-        double dx = x[0] - lastX;
-        double dy = y[0] - lastY;
-        lastX = x[0];
-        lastY = y[0];
-        if (dx == 0.0 && dy == 0.0) {
-            return;
-        }
-        double ss = mc.options.sensitivity().get() * 0.6F + 0.2F;
-        double sens = ss * ss * ss * 8.0;
-        double xo = dx * sens * (mc.options.invertMouseX().get() ? -1.0 : 1.0);
-        double yo = dy * sens * (mc.options.invertMouseY().get() ? -1.0 : 1.0);
-        // Same maths as Entity.turn, minus the vehicle callback.
-        player.setYRot(player.getYRot() + (float) xo * 0.15F);
-        player.setXRot(Mth.clamp(player.getXRot() + (float) yo * 0.15F, -90.0F, 90.0F));
-        player.setOldPosAndRot();
     }
 
     /**

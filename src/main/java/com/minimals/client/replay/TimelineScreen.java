@@ -87,18 +87,19 @@ public class TimelineScreen extends Screen {
         return false;
     }
 
+    /**
+     * ESC must give the normal pause screen (not just close the editor). The editor would come
+     * straight back, so it is closed by opening the pause screen over it.
+     */
     @Override
     public boolean shouldCloseOnEsc() {
-        return true;
+        return false;
     }
 
     // ---- geometry: timeline ---------------------------------------------------------------
 
     private int tlHeight() {
-        if (ReplayEditorState.timelineCollapsed()) {
-            return HEADER_H;
-        }
-        return HEADER_H + RULER_H + ReplayEditorState.tracks().size() * ROW_H + 3 + ADD_H + 4;
+        return ReplayEditorLayout.timelineHeight();
     }
 
     private int tlTop() {
@@ -248,6 +249,10 @@ public class TimelineScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         // No super: vanilla would dim the whole world behind the screen, hiding the replay.
+        ReplayLetterbox.render(graphics);
+        if (ReplayView.hideEditor) {
+            return;
+        }
         renderVisuals(graphics, mouseX, mouseY);
         renderTimeline(graphics, mouseX, mouseY);
     }
@@ -573,15 +578,17 @@ public class TimelineScreen extends Screen {
             }
             return true;
         }
-        if (my >= tlTop()) {
+        if (!ReplayView.hideEditor && my >= tlTop()) {
             return clickTimeline(mx, my, button);
         }
-        if (mx >= visX1() && my < visHeight()) {
+        if (!ReplayView.hideEditor && mx >= visX1() && my < visHeight()) {
             return clickVisuals(mx, my, button);
         }
         // Right button held over the world: fly the camera.
         if (button == 1) {
-            ReplayFlyCamera.begin(Minecraft.getInstance());
+            if (ReplayView.hideEditor || ReplayEditorLayout.insideViewport(mx, my)) {
+                ReplayFlyCamera.begin(Minecraft.getInstance());
+            }
             return true;
         }
         return super.mouseClicked(event, doubleClick);
@@ -707,10 +714,6 @@ public class TimelineScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (event.button() == 1 && ReplayFlyCamera.isFlying()) {
-            ReplayFlyCamera.end(Minecraft.getInstance());
-            return true;
-        }
         if (scrubbing) {
             scrubbing = false;
             ReplayPlayer.seek(scrubTick);
@@ -742,6 +745,14 @@ public class TimelineScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         int key = event.key();
+        if (key == InputConstants.KEY_ESCAPE) {
+            Minecraft.getInstance().pauseGame(false);
+            return true;
+        }
+        if (key == InputConstants.KEY_F1) {
+            ReplayView.hideEditor = !ReplayView.hideEditor;
+            return true;
+        }
         if (key == InputConstants.KEY_SPACE) {
             ReplayPlayer.setPaused(!ReplayPlayer.isPaused());
             return true;
@@ -759,7 +770,6 @@ public class TimelineScreen extends Screen {
 
     @Override
     public void removed() {
-        ReplayFlyCamera.end(Minecraft.getInstance());
         super.removed();
     }
 

@@ -14,6 +14,8 @@ public final class ReplayView {
 
     public static boolean hideHud;
     public static boolean hideTimeline;
+    /** F1 in the editor: hide the panels and let the world use the whole window. */
+    public static boolean hideEditor;
 
     private ReplayView() {
     }
@@ -49,6 +51,7 @@ public final class ReplayView {
         fov = 70.0;
         hideHud = false;
         hideTimeline = false;
+        hideEditor = false;
         ReplayVisuals.reset();
         ReplayEditorState.reset();
     }

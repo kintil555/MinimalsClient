@@ -129,6 +129,7 @@ public class MinimalClientMod implements ClientModInitializer {
             ReplayRecorder.tick();
             ReplayPlayer.tick();
             ReplayFlyCamera.tick(client);
+            ReplayPlayer.reopenEditorIfNeeded(client);
 
             if (MenuScreen.isTypingInMenu()) {
                 // Drain queued presses so they don't fire the moment the text field loses focus.
@@ -259,6 +260,12 @@ public class MinimalClientMod implements ClientModInitializer {
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         renderSpectateHint(graphics);
+        if (Minecraft.getInstance().gui.screen() == null) {
+            // Flying the replay camera: the editor screen is closed, keep the black bars and panel
+            // backdrop so the world stays inside its viewport.
+            com.minimals.client.replay.ReplayLetterbox.render(graphics);
+            com.minimals.client.replay.ReplayLetterbox.renderPanelsBackdrop(graphics, graphics.guiWidth(), graphics.guiHeight());
+        }
         ReplayHud.render(graphics);
         if (!hudVisible) return;
         WaypointRenderer.render(graphics);
