@@ -4,7 +4,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /**
  * Opaque black bars around the replay viewport. The world is rendered onto the viewport rectangle
- * only (see ReplayViewportMixin); anything outside it is whatever the framebuffer was cleared to,
+ * only (see ReplayWorldPhaseMixin); anything outside it is whatever the framebuffer was cleared to,
  * and the panels do not cover every pixel when the aspect ratio is kept, so the bars fill the gap.
  * Drawn by {@link TimelineScreen} while editing and by the HUD while the camera is being flown.
  */
@@ -19,6 +19,11 @@ public final class ReplayLetterbox {
         if (!ReplayEditorLayout.active()) {
             return;
         }
+        // Opaque backing first: the world texture may carry alpha from fog/sky passes.
+        g.fill((int) Math.round(ReplayEditorLayout.vpX()), (int) Math.round(ReplayEditorLayout.vpY()),
+                (int) Math.round(ReplayEditorLayout.vpX() + ReplayEditorLayout.vpW()),
+                (int) Math.round(ReplayEditorLayout.vpY() + ReplayEditorLayout.vpH()), BLACK);
+        ReplayViewportTarget.draw(g);
         int right = (int) Math.round(ReplayEditorLayout.areaW());
         int bottom = (int) Math.round(ReplayEditorLayout.areaH());
         int x0 = (int) Math.round(ReplayEditorLayout.vpX());

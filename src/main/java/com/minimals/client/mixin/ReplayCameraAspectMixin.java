@@ -9,12 +9,21 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
- * The camera builds its projection from the window's pixel size. In the replay editor the image
- * only occupies the viewport, so the width fed to the projection is scaled to the viewport's
- * aspect ratio (the height is kept, so the vertical FOV means what the slider says).
+ * The camera builds its projection from the window's pixel size. In the replay editor the world
+ * is rendered at the viewport's pixel size, so both width and height come from there.
  */
 @Mixin(Camera.class)
 public abstract class ReplayCameraAspectMixin {
+
+    @WrapOperation(method = "update",
+            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/Window;getHeight()I"))
+    private int minimals$viewportHeight(Window window, Operation<Integer> original) {
+        int h = original.call(window);
+        if (!ReplayEditorLayout.active()) {
+            return h;
+        }
+        return com.minimals.client.replay.ReplayViewportTarget.pixelH();
+    }
 
     @WrapOperation(method = "update",
             at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/Window;getWidth()I"))
@@ -23,7 +32,6 @@ public abstract class ReplayCameraAspectMixin {
         if (!ReplayEditorLayout.active()) {
             return w;
         }
-        int h = window.getHeight();
-        return Math.max(1, Math.round(h * ReplayEditorLayout.aspect()));
+        return com.minimals.client.replay.ReplayViewportTarget.pixelW();
     }
 }

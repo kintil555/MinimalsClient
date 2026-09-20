@@ -92,28 +92,6 @@ public final class ReplayEditorLayout {
         return (float) (vpW() / vpH());
     }
 
-    // ---- normalised device coordinates of the viewport (-1..1, y up) -----------------------
-
-    /** NDC x-scale / y-scale of the viewport relative to the full window. */
-    public static float ndcScaleX() {
-        return (float) (vpW() / guiW());
-    }
-
-    public static float ndcScaleY() {
-        return (float) (vpH() / guiH());
-    }
-
-    /** NDC centre of the viewport. */
-    public static float ndcCenterX() {
-        double cx = vpX() + vpW() / 2.0;
-        return (float) (cx / guiW() * 2.0 - 1.0);
-    }
-
-    public static float ndcCenterY() {
-        double cy = vpY() + vpH() / 2.0;
-        return (float) (1.0 - cy / guiH() * 2.0);
-    }
-
     public static boolean insideViewport(double mx, double my) {
         return mx >= vpX() && my >= vpY() && mx < vpX() + vpW() && my < vpY() + vpH();
     }
