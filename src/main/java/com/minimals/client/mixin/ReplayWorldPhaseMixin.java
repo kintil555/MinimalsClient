@@ -36,6 +36,9 @@ public abstract class ReplayWorldPhaseMixin {
 
     private static boolean minimals$logged;
 
+    private SkyRendererAccessor minimals$sky;
+    private RenderTarget minimals$skyTarget;
+
     private int minimals$oldW;
     private int minimals$oldH;
 
@@ -56,6 +59,13 @@ public abstract class ReplayWorldPhaseMixin {
         minimals$realTarget = this.mainRenderTarget;
         RenderTarget vp = ReplayViewportTarget.acquire();
         this.mainRenderTarget = vp;
+        // SkyRenderer caches the target it was created with; point it at the viewport too.
+        var sky = net.minecraft.client.Minecraft.getInstance().levelRenderer.skyRenderer();
+        if (sky != null) {
+            minimals$sky = (SkyRendererAccessor) sky;
+            minimals$skyTarget = minimals$sky.minimals$getRenderTarget();
+            minimals$sky.minimals$setRenderTarget(vp);
+        }
         // The hand projection and other world-phase maths read the window size from here.
         var ws = this.gameRenderState.windowRenderState;
         minimals$oldW = ws.width;
@@ -74,6 +84,11 @@ public abstract class ReplayWorldPhaseMixin {
         if (minimals$realTarget != null) {
             this.mainRenderTarget = minimals$realTarget;
             minimals$realTarget = null;
+            if (minimals$sky != null) {
+                minimals$sky.minimals$setRenderTarget(minimals$skyTarget);
+                minimals$sky = null;
+                minimals$skyTarget = null;
+            }
             var ws = this.gameRenderState.windowRenderState;
             ws.width = minimals$oldW;
             ws.height = minimals$oldH;
