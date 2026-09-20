@@ -36,6 +36,7 @@
     "SkyRendererAccessor",
     "ReplayDarkDiscMixin",
     "ReplayScreenGuardMixin",
+    "ReplayLocalGameModeMixin",
     "ReplayCameraAspectMixin",
     "ReplayBobMixin",
     "ReplayLocalPacketsMixin",
