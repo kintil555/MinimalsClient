@@ -14,6 +14,7 @@ public class ModuleManager {
         register(new Module("AutoSwap", Module.Category.COMBAT));
         register(new HitBoxesModule());
         register(new CustomHitSoundModule());
+        register(new SpearMomentumModule());
 
         register(new Module("Sprint", Module.Category.MOVEMENT));
         register(new Module("Nearby Entities", Module.Category.MOVEMENT));
@@ -118,6 +119,15 @@ public class ModuleManager {
             }
         }
         throw new IllegalStateException("WailaModule is not registered");
+    }
+
+    public static SpearMomentumModule spearMomentum() {
+        for (Module m : MODULES) {
+            if (m instanceof SpearMomentumModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("SpearMomentumModule is not registered");
     }
 
     public static KeystrokeModule keystrokes() {

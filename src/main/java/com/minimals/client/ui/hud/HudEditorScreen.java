@@ -52,6 +52,7 @@ public class HudEditorScreen extends Screen {
         }
 
         for (HudElement element : HudRegistry.all()) {
+            element.onScreenSize(width, height);
             boolean isDragging = element == dragging;
             float fx = element.getXExact(width);
             float fy = element.getYExact(height);
@@ -137,6 +138,7 @@ public class HudEditorScreen extends Screen {
         int mx = (int) event.x();
         int my = (int) event.y();
         for (HudElement element : HudRegistry.all()) {
+            element.onScreenSize(width, height);
             int x = element.getX(width);
             int y = element.getY(height);
             if (mx >= x - HANDLE_PADDING && mx <= x + element.getWidth() + HANDLE_PADDING

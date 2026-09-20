@@ -7,6 +7,7 @@ import com.minimals.client.ui.hud.HudEditorScreen;
 import com.minimals.client.ui.hud.HudElement;
 import com.minimals.client.ui.hud.HudRegistry;
 import com.minimals.client.ui.hud.KeystrokeElement;
+import com.minimals.client.ui.hud.SpearMomentumElement;
 import com.minimals.client.ui.hud.WailaElement;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -65,6 +66,7 @@ public class MinimalClientMod implements ClientModInitializer {
         HudRegistry.register(new ArraylistElement());
         HudRegistry.register(new KeystrokeElement());
         HudRegistry.register(new WailaElement());
+        HudRegistry.register(new SpearMomentumElement());
 
         // Restore the last session's settings (no-op on first run: default.txt does not exist yet).
         ConfigManager.load(ConfigManager.DEFAULT_NAME);
@@ -165,6 +167,7 @@ public class MinimalClientMod implements ClientModInitializer {
         // cursor). Drawing them here too would show a second, laggier copy underneath.
         if (Minecraft.getInstance().gui.screen() instanceof HudEditorScreen) return;
         for (HudElement element : HudRegistry.all()) {
+            element.onScreenSize(graphics.guiWidth(), graphics.guiHeight());
             if (element.isActive()) {
                 element.render(graphics, deltaTracker, element.getX(graphics.guiWidth()), element.getY(graphics.guiHeight()));
             }

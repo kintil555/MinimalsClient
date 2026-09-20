@@ -78,6 +78,24 @@ public abstract class HudElement {
         return Math.max(0f, Math.min(1f, value));
     }
 
+    /**
+     * Called with the current GUI size before the element's position is read (by the live HUD
+     * and by the HUD editor). Elements whose default position depends on a pixel size, such as
+     * "centred under the crosshair", can settle it here. No-op by default, so other elements are
+     * unaffected.
+     */
+    public void onScreenSize(int screenWidth, int screenHeight) {
+    }
+
+    /**
+     * Whether the saved config should store this element's position. False only for an element
+     * still sitting at an automatically computed default, so that default is recomputed for
+     * whatever GUI scale is active next launch instead of being frozen. True for everything else.
+     */
+    public boolean isPositionUserSet() {
+        return true;
+    }
+
     /** Whether this element should currently be drawn (its owning module/setting is on). */
     public abstract boolean isActive();
 

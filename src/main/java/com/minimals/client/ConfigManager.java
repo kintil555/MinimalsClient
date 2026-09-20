@@ -108,6 +108,9 @@ public final class ConfigManager {
         }
 
         for (HudElement element : HudRegistry.all()) {
+            if (!element.isPositionUserSet()) {
+                continue;
+            }
             lines.add("hud." + element.getId() + ".x=" + element.getXFrac());
             lines.add("hud." + element.getId() + ".y=" + element.getYFrac());
         }
