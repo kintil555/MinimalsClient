@@ -137,10 +137,14 @@ public final class WaypointRenderer {
                 label = new Label();
                 LABELS.put(w.id(), label);
             }
+            if (label.coordsText.isEmpty()) {
+                // A waypoint's coordinates never change (Waypoint is an immutable record), so
+                // this string is built once for the life of the cache entry.
+                label.coordsText = w.x() + ", " + w.y() + ", " + w.z();
+            }
             if (label.distance != distance) {
                 label.distance = distance;
                 label.distanceText = distance + "m";
-                label.coordsText = w.x() + ", " + w.y() + ", " + w.z();
             }
 
             drawMarker(graphics, font, module, w, label, sx, sy, scale, edgeAlpha);
