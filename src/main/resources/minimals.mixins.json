@@ -33,7 +33,11 @@
     "ReplayPositionMixin",
     "ReplayCameraMixin",
     "ReplayWorldPhaseMixin",
-    "ReplayCameraAspectMixin"
+    "ReplayCameraAspectMixin",
+    "ReplayBobMixin",
+    "ReplayLocalPacketsMixin",
+    "ClientPacketListenerAccessor",
+    "GuiGraphicsExtractorInvoker"
   ],
   "mixins": [
     "PathNavigationMixin"

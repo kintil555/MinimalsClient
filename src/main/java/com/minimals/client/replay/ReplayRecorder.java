@@ -78,6 +78,34 @@ public final class ReplayRecorder {
     /** Client tick (called from END_CLIENT_TICK). */
     public static void tick() {
         tick++;
+        sampleLocalPlayer();
+    }
+
+    /** Last LocalPlayer whose profile frame was written (a new object = respawn / new world). */
+    private static java.lang.ref.WeakReference<net.minecraft.client.player.LocalPlayer> sampledPlayer;
+
+    /**
+     * Packets never describe the recording player to itself, so its movement is stored separately:
+     * a profile frame whenever the LocalPlayer object changes and one small sample per tick. On
+     * playback a client-side RemotePlayer follows these (see ReplayRemotePlayer).
+     */
+    private static void sampleLocalPlayer() {
+        LinkedBlockingQueue<Object> q = queue;
+        Minecraft mc = Minecraft.getInstance();
+        var player = mc.player;
+        if (q == null || player == null || mc.level == null || ReplayPlayer.isActive()) {
+            return;
+        }
+        try {
+            if (sampledPlayer == null || sampledPlayer.get() != player) {
+                sampledPlayer = new java.lang.ref.WeakReference<>(player);
+                q.add(new ReplayFormat.Frame(ReplayFormat.PROTO_LOCAL, tick,
+                        ReplayLocalTrack.encodeProfile(player, mc.getGameProfile(), mc.level.registryAccess())));
+            }
+            q.add(new ReplayFormat.Frame(ReplayFormat.PROTO_LOCAL, tick, ReplayLocalTrack.encodeSample(player)));
+        } catch (RuntimeException e) {
+            MinimalClientMod.LOGGER.debug("Local player sample skipped", e);
+        }
     }
 
     // ---- connection lifecycle -------------------------------------------------------------
@@ -228,6 +256,10 @@ public final class ReplayRecorder {
             while ((f = in.next()) != null) {
                 if (f.tick() > endTick) {
                     break;
+                }
+                if (f.protocol() == ReplayFormat.PROTO_LOCAL && f.data().length > 0
+                        && f.data()[0] == ReplayLocalTrack.KIND_SAMPLE && f.tick() < from - 1) {
+                    continue; // only the last pre-mark sample is needed to place the model at start
                 }
                 w.write(f.protocol(), Math.max(0, f.tick() - from), f.data());
             }

@@ -139,6 +139,7 @@ public final class ReplayPlayer {
     public static void open(Path file) {
         Minecraft mc = Minecraft.getInstance();
         List<ReplayFormat.Frame> loaded = new ArrayList<>();
+        List<ReplayFormat.Frame> local = new ArrayList<>();
         int last = 0;
         String replayName;
         ReplayFormat.Pose pose;
@@ -147,7 +148,12 @@ public final class ReplayPlayer {
             pose = r.pose();
             ReplayFormat.Frame f;
             while ((f = r.next()) != null) {
-                loaded.add(f);
+                if (f.protocol() == ReplayFormat.PROTO_LOCAL) {
+                    // Not a packet: the recorded player's own track, played by ReplayRemotePlayer.
+                    local.add(f);
+                } else {
+                    loaded.add(f);
+                }
                 last = Math.max(last, f.tick());
             }
         } catch (IOException e) {
@@ -159,6 +165,7 @@ public final class ReplayPlayer {
         }
         FRAMES.clear();
         FRAMES.addAll(loaded);
+        ReplayRemotePlayer.load(local);
         totalTicks = last;
         name = replayName;
         startPose = pose;
@@ -183,6 +190,7 @@ public final class ReplayPlayer {
         placed = false;
         poseApplied = false;
         timelineShown = false;
+        ReplayRemotePlayer.reset();
 
         LevelLoadTracker tracker = new LevelLoadTracker(0L);
         mc.gui.setScreen(new LevelLoadingScreen(tracker, LevelLoadingScreen.Reason.OTHER));
@@ -207,6 +215,8 @@ public final class ReplayPlayer {
         active = false;
         shutdownConnection();
         FRAMES.clear();
+        ReplayRemotePlayer.clear();
+        ReplayViewportTarget.close();
         startPose = null;
         keptPose = null;
         if (wasActive) {
@@ -338,6 +348,9 @@ public final class ReplayPlayer {
 
         if (isInWorld() && !poseApplied) {
             applyStartPose(mc);
+        }
+        if (isInWorld()) {
+            ReplayRemotePlayer.tick(mc);
         }
 
         if (isInWorld() && !timelineShown && mc.gui.screen() == null) {

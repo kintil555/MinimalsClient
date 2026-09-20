@@ -18,6 +18,12 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 public final class ReplayViewportTarget {
 
     private static TextureTarget target;
+    /**
+     * The GUI element that shows the world is extracted BEFORE the world is rendered, so it holds
+     * the texture view of the target as it was then. A target that is resized is therefore kept
+     * alive for one more frame instead of being destroyed under that view.
+     */
+    private static TextureTarget retired;
 
     private ReplayViewportTarget() {
     }
@@ -37,10 +43,15 @@ public final class ReplayViewportTarget {
     public static RenderTarget acquire() {
         int w = pixelW();
         int h = pixelH();
+        if (retired != null) {
+            retired.destroyBuffers();
+            retired = null;
+        }
         if (target == null) {
             target = new TextureTarget("minimals replay viewport", w, h, true, GpuFormat.RGBA8_UNORM);
         } else if (target.width != w || target.height != h) {
-            target.resize(w, h);
+            retired = target;
+            target = new TextureTarget("minimals replay viewport", w, h, true, GpuFormat.RGBA8_UNORM);
         }
         return target;
     }
@@ -59,11 +70,19 @@ public final class ReplayViewportTarget {
         int x1 = (int) Math.round(ReplayEditorLayout.vpX() + ReplayEditorLayout.vpW());
         int y1 = (int) Math.round(ReplayEditorLayout.vpY() + ReplayEditorLayout.vpH());
         // v is flipped: render targets are stored bottom-up relative to GUI space.
-        g.blit(target.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR),
-                x0, y0, x1, y1, 0.0F, 1.0F, 1.0F, 0.0F);
+        // Opaque pipeline: world passes leave alpha < 1 (sky/fog clear alpha is 0), which must not
+        // let the black backing show through. The vanilla present blit ignores alpha the same way.
+        ((com.minimals.client.mixin.GuiGraphicsExtractorInvoker) g).minimals$blit(
+                net.minecraft.client.renderer.RenderPipelines.GUI_OPAQUE_TEXTURED_BACKGROUND,
+                target.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR),
+                x0, y0, x1, y1, 0.0F, 1.0F, 1.0F, 0.0F, -1);
     }
 
     public static void close() {
+        if (retired != null) {
+            retired.destroyBuffers();
+            retired = null;
+        }
         if (target != null) {
             target.destroyBuffers();
             target = null;

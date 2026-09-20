@@ -34,4 +34,24 @@ public abstract class ReplayCameraAspectMixin {
         }
         return com.minimals.client.replay.ReplayViewportTarget.pixelW();
     }
+
+    // The culling frustum is built from the window aspect too; keep it matching the viewport.
+    @WrapOperation(method = "createProjectionMatrixForCulling",
+            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/Window;getWidth()I"))
+    private int minimals$cullWidth(Window window, Operation<Integer> original) {
+        return ReplayEditorLayout.active() ? com.minimals.client.replay.ReplayViewportTarget.pixelW() : original.call(window);
+    }
+
+    @WrapOperation(method = "createProjectionMatrixForCulling",
+            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/platform/Window;getHeight()I"))
+    private int minimals$cullHeight(Window window, Operation<Integer> original) {
+        return ReplayEditorLayout.active() ? com.minimals.client.replay.ReplayViewportTarget.pixelH() : original.call(window);
+    }
+
+    /** The camera entity's eye height follows its pose (sneak, swim); the replay camera must not dip. */
+    @WrapOperation(method = "tick",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getEyeHeight()F"))
+    private float minimals$steadyEyeHeight(net.minecraft.world.entity.Entity entity, Operation<Float> original) {
+        return com.minimals.client.replay.ReplayPlayer.isActive() ? 1.62F : original.call(entity);
+    }
 }

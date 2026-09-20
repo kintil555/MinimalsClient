@@ -15,7 +15,7 @@ import java.util.zip.GZIPOutputStream;
  * <pre>
  * header : int MAGIC, int VERSION, UTF name, UTF mcVersion, long startedAtMillis
  *          (VERSION 2 adds: byte hasPose, then 3 x double xyz + 2 x float yRot xRot when hasPose != 0)
- * record : byte protocol (0 login, 1 configuration, 2 play), int tick, int length, bytes
+ * record : byte protocol (0 login, 1 configuration, 2 play, 3 local-player track), int tick, int length, bytes
  * end    : byte -1, int totalTicks
  * </pre>
  *
@@ -30,6 +30,8 @@ public final class ReplayFormat {
     public static final byte PROTO_LOGIN = 0;
     public static final byte PROTO_CONFIG = 1;
     public static final byte PROTO_PLAY = 2;
+    /** Not a packet: the recorded player's own state (profile / per-tick sample), see ReplayLocalTrack. */
+    public static final byte PROTO_LOCAL = 3;
     public static final byte END = -1;
 
     private ReplayFormat() {
