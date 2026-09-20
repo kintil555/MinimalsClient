@@ -37,6 +37,7 @@
     "ReplayBobMixin",
     "ReplayLocalPacketsMixin",
     "ReplayRemotePlayerMixin",
+    "ReplayFreezeMixin",
     "ReplaySkinLayersMixin",
     "ReplayPlayerInfoMixin",
     "ReplayPlayerInfoFallbackMixin",

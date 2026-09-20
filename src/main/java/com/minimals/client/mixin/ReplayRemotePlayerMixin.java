@@ -1,47 +1,33 @@
 package com.minimals.client.mixin;
 
 import com.minimals.client.replay.ReplayPlayer;
-import com.mojang.authlib.GameProfile;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.player.AbstractClientPlayer;
+import com.minimals.client.replay.ReplayRemotePlayer;
 import net.minecraft.client.player.RemotePlayer;
+import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * Same idea as Flashback's MixinRemotePlayer: during a replay every RemotePlayer's walk animation
- * is fed from how far it actually moved this tick. RemotePlayer.aiStep only interpolates, it never
- * advances the walked distance itself, so the legs stayed still on client-driven players.
+ * Walk animation for the recorded player.
+ *
+ * ClientLevel.tickNonPassenger calls setOldPosAndRot() right before entity.tick(), so the
+ * distance calculateEntityAnimation() derives (x - xo) is always 0 for an entity that is moved
+ * once per tick from outside, and the legs never move. The real per-tick distance recorded by
+ * {@link ReplayRemotePlayer} replaces it at the single place the animation consumes it, and the
+ * same step also advances the walked distance that drives the arm/leg swing cycle.
  */
-@Mixin(RemotePlayer.class)
-public abstract class ReplayRemotePlayerMixin extends AbstractClientPlayer {
+@Mixin(LivingEntity.class)
+public abstract class ReplayRemotePlayerMixin {
 
-    @Unique
-    private double minimals$lastX;
-    @Unique
-    private double minimals$lastZ;
-    @Unique
-    private boolean minimals$hasLast;
-
-    private ReplayRemotePlayerMixin(ClientLevel level, GameProfile profile) {
-        super(level, profile);
-    }
-
-    @Inject(method = "aiStep", at = @At("RETURN"))
-    private void minimals$walkDistance(CallbackInfo ci) {
-        if (!ReplayPlayer.isActive()) {
-            return;
+    @ModifyVariable(method = "updateWalkAnimation", at = @At("HEAD"), argsOnly = true)
+    private float minimals$recordedStep(float distance) {
+        if (ReplayPlayer.isActive() && (Object) this instanceof RemotePlayer p
+                && ReplayRemotePlayer.isRecordedPlayer(p)) {
+            float step = ReplayRemotePlayer.stepOf();
+            p.avatarState().addWalkDistance(step * 0.6F);
+            return step;
         }
-        if (minimals$hasLast) {
-            double dx = minimals$lastX - this.getX();
-            double dz = minimals$lastZ - this.getZ();
-            this.addWalkedDistance((float) Math.sqrt(dx * dx + dz * dz) * 0.6F);
-        }
-        minimals$lastX = this.getX();
-        minimals$lastZ = this.getZ();
-        minimals$hasLast = true;
+        return distance;
     }
 }

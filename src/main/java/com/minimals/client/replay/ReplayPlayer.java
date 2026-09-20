@@ -114,6 +114,17 @@ public final class ReplayPlayer {
 
     public static void setPaused(boolean p) {
         paused = p;
+        applyFrozen(Minecraft.getInstance());
+    }
+
+    /**
+     * Pause = the vanilla frozen tick state: the world, block/falling entities and the recorded
+     * player all stop (see ReplayFreezeMixin), instead of only no longer feeding packets.
+     */
+    private static void applyFrozen(Minecraft mc) {
+        if (mc.level != null && active) {
+            mc.level.tickRateManager().setFrozen(paused && seekTarget < 0);
+        }
     }
 
     public static double speed() {
@@ -350,6 +361,8 @@ public final class ReplayPlayer {
             applyStartPose(mc);
         }
         if (isInWorld()) {
+            // A new world (start / backwards seek) starts unfrozen; re-apply the pause every tick.
+            mc.level.tickRateManager().setFrozen(paused && seekTarget < 0);
             ReplayRemotePlayer.tick(mc);
         }
 
@@ -381,7 +394,7 @@ public final class ReplayPlayer {
         position = Math.min(totalTicks, position + speed);
         feedUntil(ch, (int) position, 4000);
         if (position >= totalTicks && nextFrame >= FRAMES.size()) {
-            paused = true;
+            setPaused(true);
         }
     }
 

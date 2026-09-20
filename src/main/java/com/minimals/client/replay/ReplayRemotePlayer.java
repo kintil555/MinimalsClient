@@ -39,7 +39,8 @@ public final class ReplayRemotePlayer {
 
     private static ReplayLocalTrack.State state;
     private static boolean stateDirty;
-    private static boolean hasLast;
+    /** Horizontal distance the recorded player moved in the last applied sample. */
+    private static float step;
 
     private static RemotePlayer entity;
     private static UUID fakeId;
@@ -47,6 +48,13 @@ public final class ReplayRemotePlayer {
     /** Skin layer bitmask (PlayerModelPart.getMask()) of the recorded player; -1 = unknown. */
     public static int skinLayers() {
         return state == null ? -1 : state.skinLayers();
+    }
+
+    /** Per-tick horizontal distance of the recorded player, for the walk animation. */
+    public static float stepOf() {
+        float s = step;
+        step = 0.0F; // consumed: a tick without a new sample (pause, slow speed) must not keep walking
+        return s;
     }
 
     /** True for the entity that stands in for the recorded player. */
@@ -79,7 +87,7 @@ public final class ReplayRemotePlayer {
         wasSwinging = false;
         state = null;
         stateDirty = false;
-        hasLast = false;
+        step = 0.0F;
         entity = null;
         fakeId = null;
     }
@@ -168,7 +176,7 @@ public final class ReplayRemotePlayer {
         level.addEntity(p);
         entity = p;
         wasSwinging = false;
-        hasLast = false;
+        step = 0.0F;
         applyState(p);
     }
 
@@ -176,6 +184,7 @@ public final class ReplayRemotePlayer {
         double dx = s.x() - p.getX();
         double dy = s.y() - p.getY();
         double dz = s.z() - p.getZ();
+        step = (float) Math.sqrt(dx * dx + dz * dz);
         p.setOldPosAndRot();
         p.setPos(s.x(), s.y(), s.z());
         p.setYRot(s.yRot());
