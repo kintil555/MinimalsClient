@@ -13,9 +13,13 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -32,6 +36,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
 import java.util.ArrayList;
+import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Optional;
 
@@ -419,7 +424,7 @@ public class WailaElement extends HudElement {
         WailaModule module = module();
         Font font = mc.font;
         List<Line> lines = new ArrayList<>();
-        lines.add(new TextLine(entity.getDisplayName().copy().withStyle(ChatFormatting.WHITE), COLOR_TITLE));
+        lines.add(new TextLine(entityTitle(entity).copy().withStyle(ChatFormatting.WHITE), COLOR_TITLE));
 
         if (entity instanceof Villager villager) {
             Component career = professionName(villager);
@@ -444,13 +449,31 @@ public class WailaElement extends HudElement {
         return measure(font, ItemStack.EMPTY, lines);
     }
 
-    /** Career name of a villager, or null for a profession-less one (the title already says "Villager"). */
+    /**
+     * Title of the box. Vanilla's Villager#getTypeName returns the profession ("Shepherd"), so
+     * getName()/getDisplayName() would show the job as the title and leave the "Career" row
+     * redundant. A villager without a custom name is titled by its entity type ("Villager"),
+     * like the reference screenshot; everything else keeps its normal display name.
+     */
+    private static Component entityTitle(Entity entity) {
+        if (entity instanceof Villager && !entity.hasCustomName()) {
+            return entity.getType().getDescription();
+        }
+        return entity.getDisplayName();
+    }
+
+    /**
+     * Career of a villager, or null when it has none. The profession is identified by its
+     * registry id ("minecraft:none") rather than Holder#is(ResourceKey), which compares by
+     * object identity.
+     */
     private static Component professionName(Villager villager) {
-        VillagerProfession profession = villager.getVillagerData().profession().value();
-        if (villager.getVillagerData().profession().is(VillagerProfession.NONE)) {
+        Holder<VillagerProfession> holder = villager.getVillagerData().profession();
+        Optional<ResourceKey<VillagerProfession>> key = holder.unwrapKey();
+        if (key.isEmpty() || key.get().identifier().getPath().equals("none")) {
             return null;
         }
-        return profession.name();
+        return holder.value().name();
     }
 
     private static HeartStyle heartStyle(LivingEntity living) {
@@ -467,7 +490,7 @@ public class WailaElement extends HudElement {
     }
 
     private static void addEffects(List<Line> lines, LivingEntity living, int max) {
-        List<MobEffectInstance> effects = new ArrayList<>(living.getActiveEffects());
+        List<MobEffectInstance> effects = readEffects(living);
         if (effects.isEmpty()) {
             return;
         }
@@ -485,6 +508,35 @@ public class WailaElement extends HudElement {
         if (hidden > 0) {
             lines.add(new TextLine(Component.literal("+" + hidden + " more"), COLOR_INFO));
         }
+    }
+
+    /**
+     * Active effects of an entity, as a fresh list.
+     *
+     * A client only ever learns another mob's effects if it is riding that mob: the server sends
+     * ClientboundUpdateMobEffectPacket to passengers only (LivingEntity#sendEffectToPassengers),
+     * so getActiveEffects() on a mob you merely look at is always empty. In singleplayer the
+     * integrated server holds the real entity, so its effects (with level and duration) are
+     * read from there. On a remote server nothing better exists client-side, so whatever the
+     * client entity has (your own effects, or a mount's) is used.
+     */
+    private static List<MobEffectInstance> readEffects(LivingEntity living) {
+        Minecraft mc = Minecraft.getInstance();
+        MinecraftServer server = mc.getSingleplayerServer();
+        if (server != null && mc.level != null) {
+            ServerLevel serverLevel = server.getLevel(mc.level.dimension());
+            if (serverLevel != null) {
+                Entity real = serverLevel.getEntity(living.getId());
+                if (real instanceof LivingEntity serverLiving) {
+                    try {
+                        return new ArrayList<>(serverLiving.getActiveEffects());
+                    } catch (ConcurrentModificationException e) {
+                        // The server thread changed the effect map mid-copy; use the client copy this frame.
+                    }
+                }
+            }
+        }
+        return new ArrayList<>(living.getActiveEffects());
     }
 
     /** "Speed II (0:30)", same shape as the vanilla inventory effect list. */
