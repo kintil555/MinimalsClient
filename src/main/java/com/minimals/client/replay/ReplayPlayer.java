@@ -152,6 +152,7 @@ public final class ReplayPlayer {
         List<ReplayFormat.Frame> loaded = new ArrayList<>();
         List<ReplayFormat.Frame> local = new ArrayList<>();
         int last = 0;
+        int dropped = 0;
         String replayName;
         ReplayFormat.Pose pose;
         try (ReplayFormat.Reader r = new ReplayFormat.Reader(file)) {
@@ -162,6 +163,8 @@ public final class ReplayPlayer {
                 if (f.protocol() == ReplayFormat.PROTO_LOCAL) {
                     // Not a packet: the recorded player's own track, played by ReplayRemotePlayer.
                     local.add(f);
+                } else if (ReplayFrameFilter.drop(f)) {
+                    dropped++;
                 } else {
                     loaded.add(f);
                 }
@@ -170,6 +173,9 @@ public final class ReplayPlayer {
         } catch (IOException e) {
             MinimalClientMod.LOGGER.warn("Cannot open replay {}", file, e);
             return;
+        }
+        if (dropped > 0) {
+            MinimalClientMod.LOGGER.info("Replay {}: skipped {} live-connection frame(s)", file.getFileName(), dropped);
         }
         if (loaded.isEmpty()) {
             return;
