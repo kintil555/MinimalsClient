@@ -7,6 +7,7 @@ import com.minimals.client.ui.hud.HudEditorScreen;
 import com.minimals.client.ui.hud.HudElement;
 import com.minimals.client.ui.hud.HudRegistry;
 import com.minimals.client.ui.hud.KeystrokeElement;
+import com.minimals.client.ui.hud.WailaElement;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -63,6 +64,7 @@ public class MinimalClientMod implements ClientModInitializer {
 
         HudRegistry.register(new ArraylistElement());
         HudRegistry.register(new KeystrokeElement());
+        HudRegistry.register(new WailaElement());
 
         // Restore the last session's settings (no-op on first run: default.txt does not exist yet).
         ConfigManager.load(ConfigManager.DEFAULT_NAME);

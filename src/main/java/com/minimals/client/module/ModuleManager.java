@@ -26,6 +26,7 @@ public class ModuleManager {
         register(new BlockOnEntitiesModule());
         register(new SnapPerspectiveModule());
         register(new ShulkerPreviewModule());
+        register(new WailaModule());
 
         register(new OptimizationModule());
         register(new CrystalOptimizerModule());
@@ -108,6 +109,15 @@ public class ModuleManager {
             }
         }
         throw new IllegalStateException("ShulkerPreviewModule is not registered");
+    }
+
+    public static WailaModule waila() {
+        for (Module m : MODULES) {
+            if (m instanceof WailaModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("WailaModule is not registered");
     }
 
     public static KeystrokeModule keystrokes() {
