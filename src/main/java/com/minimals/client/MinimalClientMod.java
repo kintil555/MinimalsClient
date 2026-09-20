@@ -2,6 +2,7 @@ package com.minimals.client;
 
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
+import com.minimals.client.replay.ReplayFlyCamera;
 import com.minimals.client.replay.ReplayHud;
 import com.minimals.client.replay.ReplayPlayer;
 import com.minimals.client.replay.ReplayRecorder;
@@ -127,6 +128,7 @@ public class MinimalClientMod implements ClientModInitializer {
             SpectateManager.tick(client);
             ReplayRecorder.tick();
             ReplayPlayer.tick();
+            ReplayFlyCamera.tick(client);
 
             if (MenuScreen.isTypingInMenu()) {
                 // Drain queued presses so they don't fire the moment the text field loses focus.

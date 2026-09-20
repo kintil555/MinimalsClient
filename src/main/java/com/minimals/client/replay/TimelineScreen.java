@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 /**
  * Replay controls, shown as a bar along the bottom of the screen: play/pause, speed, a scrubbable
  * timeline and a FOV slider. It is a screen (so the mouse is free) that does not pause the game.
- * Close it with Esc or the same key that opened it to fly the camera.
+ * Hold the right mouse button over the world to fly the camera (see ReplayFlyCamera).
  */
 public class TimelineScreen extends Screen {
 
@@ -131,7 +131,7 @@ public class TimelineScreen extends Screen {
                 ReplayView.isFovOverride() ? UiRenderer.ACCENT : 0xFF6A6A72);
 
         // Hint
-        UiRenderer.text(graphics, "Esc: fly   Space: play/pause   Left/Right: 5s   Scroll: FOV", PAD, top + 44,
+        UiRenderer.text(graphics, "Hold RMB + WASD/Space/Shift: fly   Space: play/pause   Left/Right: 5s   Scroll: FOV   Esc: close", PAD, top + 44,
                 UiRenderer.TEXT_SECONDARY);
     }
 
@@ -175,6 +175,11 @@ public class TimelineScreen extends Screen {
             ReplayView.setFovOverride(false);
             return true;
         }
+        // Right button held over the world (anywhere above the bar): fly the camera.
+        if (event.button() == 1 && my < top) {
+            ReplayFlyCamera.begin(Minecraft.getInstance());
+            return true;
+        }
         return super.mouseClicked(event, doubleClick);
     }
 
@@ -201,6 +206,10 @@ public class TimelineScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == 1 && ReplayFlyCamera.isFlying()) {
+            ReplayFlyCamera.end(Minecraft.getInstance());
+            return true;
+        }
         if (scrubbing) {
             scrubbing = false;
             ReplayPlayer.seek(scrubTick);
@@ -232,6 +241,12 @@ public class TimelineScreen extends Screen {
             return true;
         }
         return super.keyPressed(event);
+    }
+
+    @Override
+    public void removed() {
+        ReplayFlyCamera.end(Minecraft.getInstance());
+        super.removed();
     }
 
     @Override

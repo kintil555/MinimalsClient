@@ -61,6 +61,12 @@ public final class ReplayPlayer {
     private static boolean pendingSeek;
     /** True once the first recorded position packet has placed the camera in this world. */
     private static boolean placed;
+    /** Where the player stood when Record was pressed, or null for pose-less files. */
+    private static ReplayFormat.Pose startPose;
+    /** True once the camera has been moved to {@link #startPose} in the current world. */
+    private static boolean poseApplied;
+    /** Camera position kept across a seek (which rebuilds the world), so flying is not undone. */
+    private static ReplayFormat.Pose keptPose;
     /** The timeline bar is opened once per world so the user sees the controls, then may close it. */
     private static boolean timelineShown;
 
@@ -97,7 +103,9 @@ public final class ReplayPlayer {
             return false;
         }
         placed = true;
-        return true;
+        // With a recorded start pose the join teleport must not move the camera: that packet holds
+        // where the player JOINED, often underground relative to the chunk, not where Record began.
+        return startPose == null && keptPose == null;
     }
 
     public static boolean isPaused() {
@@ -133,8 +141,10 @@ public final class ReplayPlayer {
         List<ReplayFormat.Frame> loaded = new ArrayList<>();
         int last = 0;
         String replayName;
+        ReplayFormat.Pose pose;
         try (ReplayFormat.Reader r = new ReplayFormat.Reader(file)) {
             replayName = r.header().name();
+            pose = r.pose();
             ReplayFormat.Frame f;
             while ((f = r.next()) != null) {
                 loaded.add(f);
@@ -151,6 +161,7 @@ public final class ReplayPlayer {
         FRAMES.addAll(loaded);
         totalTicks = last;
         name = replayName;
+        startPose = pose;
         paused = false;
         speed = 1.0;
         begin(mc, 0);
@@ -158,6 +169,10 @@ public final class ReplayPlayer {
 
     /** (Re)creates the world and feeds frames up to {@code targetTick} immediately. */
     private static void begin(Minecraft mc, int targetTick) {
+        keptPose = isInWorld() && poseApplied
+                ? new ReplayFormat.Pose(mc.player.getX(), mc.player.getY(), mc.player.getZ(),
+                        mc.player.getYRot(), mc.player.getXRot())
+                : null;
         shutdownConnection();
         // Leave whatever world we are in (or the title screen) before building the replay world.
         mc.disconnect(new net.minecraft.client.gui.screens.GenericMessageScreen(Component.literal("Loading replay")), false);
@@ -166,6 +181,7 @@ public final class ReplayPlayer {
         nextFrame = 0;
         seekTarget = targetTick;
         placed = false;
+        poseApplied = false;
         timelineShown = false;
 
         LevelLoadTracker tracker = new LevelLoadTracker(0L);
@@ -191,6 +207,8 @@ public final class ReplayPlayer {
         active = false;
         shutdownConnection();
         FRAMES.clear();
+        startPose = null;
+        keptPose = null;
         if (wasActive) {
             mc.disconnect(new net.minecraft.client.gui.screens.TitleScreen(), false);
         }
@@ -236,6 +254,30 @@ public final class ReplayPlayer {
         return serverBind.channel().localAddress();
     }
 
+    /** Camera height above the recorded player's feet: a little over eye level (1.62). */
+    private static final double CAMERA_LIFT = 2.0;
+
+    /**
+     * Moves the free camera to where the player was when Record was pressed, a little above head
+     * height. Runs once per world, after the join teleport has been consumed, so nothing overwrites
+     * it. Files without a pose keep the position the recorded join packet gave.
+     */
+    private static void applyStartPose(Minecraft mc) {
+        poseApplied = true;
+        ReplayFormat.Pose kept = keptPose;
+        keptPose = null;
+        ReplayFormat.Pose pose = kept != null ? kept : startPose;
+        if (pose == null || mc.player == null) {
+            return;
+        }
+        double lift = kept != null ? 0.0 : CAMERA_LIFT;
+        mc.player.setPos(pose.x(), pose.y() + lift, pose.z());
+        mc.player.setYRot(pose.yRot());
+        mc.player.setXRot(pose.xRot());
+        mc.player.setOldPosAndRot();
+        mc.player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+    }
+
     // ---- timeline control -----------------------------------------------------------------
 
     /** Jumps to {@code tick}. Rebuilds the world, so it takes a moment. */
@@ -277,6 +319,10 @@ public final class ReplayPlayer {
         Channel ch = channel(c);
         if (ch == null) {
             return;
+        }
+
+        if (isInWorld() && !poseApplied) {
+            applyStartPose(mc);
         }
 
         if (isInWorld() && !timelineShown && mc.gui.screen() == null) {

@@ -31,7 +31,8 @@
     "TitleScreenMixin",
     "ReplayGameModeMixin",
     "ReplayPositionMixin",
-    "ReplayCameraMixin"
+    "ReplayCameraMixin",
+    "ReplayLookMixin"
   ],
   "mixins": [
     "PathNavigationMixin"

@@ -14,6 +14,7 @@ import java.util.zip.GZIPOutputStream;
  *
  * <pre>
  * header : int MAGIC, int VERSION, UTF name, UTF mcVersion, long startedAtMillis
+ *          (VERSION 2 adds: byte hasPose, then 3 x double xyz + 2 x float yRot xRot when hasPose != 0)
  * record : byte protocol (0 login, 1 configuration, 2 play), int tick, int length, bytes
  * end    : byte -1, int totalTicks
  * </pre>
@@ -25,7 +26,7 @@ import java.util.zip.GZIPOutputStream;
 public final class ReplayFormat {
 
     public static final int MAGIC = 0x4D525031; // "MRP1"
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
     public static final byte PROTO_LOGIN = 0;
     public static final byte PROTO_CONFIG = 1;
     public static final byte PROTO_PLAY = 2;
@@ -37,6 +38,10 @@ public final class ReplayFormat {
     public record Meta(String name, String mcVersion, long startedAt, int totalTicks) {
     }
 
+    /** Where the recorded player stood (eye-independent feet position) when the clip started. */
+    public record Pose(double x, double y, double z, float yRot, float xRot) {
+    }
+
     public record Frame(byte protocol, int tick, byte[] data) {
     }
 
@@ -45,6 +50,10 @@ public final class ReplayFormat {
         private int lastTick;
 
         public Writer(Path file, String name, String mcVersion, long startedAt) throws IOException {
+            this(file, name, mcVersion, startedAt, null);
+        }
+
+        public Writer(Path file, String name, String mcVersion, long startedAt, Pose pose) throws IOException {
             Files.createDirectories(file.getParent());
             this.out = new DataOutputStream(new GZIPOutputStream(
                     Files.newOutputStream(file, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING),
@@ -54,6 +63,14 @@ public final class ReplayFormat {
             out.writeUTF(name);
             out.writeUTF(mcVersion);
             out.writeLong(startedAt);
+            out.writeByte(pose == null ? 0 : 1);
+            if (pose != null) {
+                out.writeDouble(pose.x());
+                out.writeDouble(pose.y());
+                out.writeDouble(pose.z());
+                out.writeFloat(pose.yRot());
+                out.writeFloat(pose.xRot());
+            }
         }
 
         public void write(byte protocol, int tick, byte[] data) throws IOException {
@@ -80,6 +97,7 @@ public final class ReplayFormat {
     public static final class Reader implements AutoCloseable {
         private final DataInputStream in;
         private final Meta header;
+        private final Pose pose;
         private int totalTicks = -1;
 
         public Reader(Path file) throws IOException {
@@ -88,14 +106,24 @@ public final class ReplayFormat {
                 throw new IOException("Not a .mreplay file");
             }
             int version = in.readInt();
-            if (version != VERSION) {
+            if (version < 1 || version > VERSION) {
                 throw new IOException("Unsupported replay version " + version);
             }
             this.header = new Meta(in.readUTF(), in.readUTF(), in.readLong(), -1);
+            Pose p = null;
+            if (version >= 2 && in.readByte() != 0) {
+                p = new Pose(in.readDouble(), in.readDouble(), in.readDouble(), in.readFloat(), in.readFloat());
+            }
+            this.pose = p;
         }
 
         public Meta header() {
             return header;
+        }
+
+        /** Player pose at the moment the clip was started, or null for old / pose-less files. */
+        public Pose pose() {
+            return pose;
         }
 
         /** Next frame, or null at end of file. */

@@ -44,6 +44,8 @@ public final class ReplayRecorder {
     private static volatile boolean recording;
     private static volatile int markTick;
     private static volatile String status = "";
+    /** Where the player stood when Record was pressed; becomes the replay's starting camera. */
+    private static volatile ReplayFormat.Pose markPose;
 
     private static Connection current;
     private static LinkedBlockingQueue<Object> queue;
@@ -154,6 +156,7 @@ public final class ReplayRecorder {
                 return;
             }
             markTick = tick;
+            markPose = capturePose();
             recording = true;
             status = "Recording";
         }
@@ -181,7 +184,7 @@ public final class ReplayRecorder {
             Path snapshot = ReplayStorage.dir().resolve(".snapshot.tmp");
             Files.copy(ReplayStorage.bufferFile(), snapshot, StandardCopyOption.REPLACE_EXISTING);
             try {
-                clip(snapshot, out, stamp, from, endTick);
+                clip(snapshot, out, stamp, from, endTick, markPose);
             } finally {
                 Files.deleteIfExists(snapshot);
             }
@@ -191,6 +194,14 @@ public final class ReplayRecorder {
             status = "Save failed: " + e.getMessage();
             MinimalClientMod.LOGGER.warn("Replay save failed", e);
         }
+    }
+
+    private static ReplayFormat.Pose capturePose() {
+        var player = Minecraft.getInstance().player;
+        if (player == null) {
+            return null;
+        }
+        return new ReplayFormat.Pose(player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
     }
 
     private static void flushBuffer() {
@@ -208,10 +219,11 @@ public final class ReplayRecorder {
     }
 
     /** Copies frames [0..endTick] rebasing ticks so that frames before {@code from} land on 0. */
-    private static void clip(Path buffer, Path out, String name, int from, int endTick) throws IOException {
+    private static void clip(Path buffer, Path out, String name, int from, int endTick,
+                             ReplayFormat.Pose pose) throws IOException {
         try (ReplayFormat.Reader in = new ReplayFormat.Reader(buffer);
              ReplayFormat.Writer w = new ReplayFormat.Writer(out, name,
-                     in.header().mcVersion(), in.header().startedAt())) {
+                     in.header().mcVersion(), in.header().startedAt(), pose)) {
             ReplayFormat.Frame f;
             while ((f = in.next()) != null) {
                 if (f.tick() > endTick) {
