@@ -51,16 +51,22 @@ public class TimelineScreen extends Screen {
     };
 
     // ---- palette --------------------------------------------------------------------------
-    private static final int BG = 0xF01B1B1F;
-    private static final int TAB_BG = 0xFF303038;
-    private static final int TAB_BG_HOVER = 0xFF3B3B45;
+    private static final int BG = 0xFF000000;
+    private static final int TL_BG = 0xFF00160F;      // timeline body (dark green)
+    private static final int TL_SIDE = 0xFF001A0F;     // track-label column
+    private static final int TRACK_LABEL = 0xFF3535CC; // blue-violet label pills
+    private static final int TRACK_LABEL_HOVER = 0xFF4A4AE0;
+    private static final int ROW_PILL = 0xFF06263F;    // Visuals label pills (dark blue)
+    private static final int ROW_PILL_HOVER = 0xFF0B3558;
+    private static final int PLAY_RED = 0xFFFF1010;
+    private static final int KEY_DOT = 0xFFFFFFFF;
+    private static final int TAB_BG = 0xFFFFFFFF;   // white pill tab
+    private static final int TAB_BG_HOVER = 0xFFE2E2E8;
     private static final int LINE = 0xFF3A3A42;
     private static final int DIVIDER = 0xFF9A9AA5;
     private static final int ROW_HOVER = 0x22FFFFFF;
-    private static final int BLUE = 0xFF0B63CE;
-    private static final int BLUE_HOVER = 0xFF2B7CE6;
-    private static final int CHECK_BLUE = 0xFF2D8CFF;
-    private static final int BOX_BG = 0xFF2A2A31;
+    private static final int CHECK_BLUE = 0xFFFFFFFF; // white tick / slider
+    private static final int BOX_BG = 0xFF646464;   // grey checkbox
     private static final int WHITE = 0xFFFFFFFF;
     private static final int ICON_HOVER = 0xFF7DB4FF;
     private static final int TEXT = UiRenderer.TEXT_PRIMARY;
@@ -314,8 +320,8 @@ public class TimelineScreen extends Screen {
         int x1 = visX1();
         int h = visHeight();
         g.fill(x1, 0, width, h, BG);
-        g.fill(x1, 0, x1 + 1, h, LINE);
-        g.fill(x1, h - 1, width, h, LINE);
+        g.fill(x1, 0, x1 + 1, h, DIVIDER);
+        g.fill(x1, h - 1, width, h, DIVIDER);
         drawTab(g, x1 + 6, 2, "Visuals", !ReplayEditorState.visualsCollapsed(), mx, my);
         if (ReplayEditorState.visualsCollapsed()) {
             return;
@@ -341,7 +347,10 @@ public class TimelineScreen extends Screen {
                         g.fill(x1 + 2, ry, width - 6, ry + r.h(), ROW_HOVER);
                     }
                     drawCheckbox(g, x1 + 8, ry + 2, ReplayVisuals.get(r.toggle()));
-                    UiRenderer.text(g, r.label(), x1 + 8 + 16, ry + 4, TEXT);
+                    int px1 = x1 + 8 + 20;
+                    int px2 = width - 10;
+                    UiRenderer.roundedRect(g, px1, ry + 1, px2, ry + r.h() - 1, 4, hover ? ROW_PILL_HOVER : ROW_PILL);
+                    UiRenderer.text(g, r.label(), px1 + (px2 - px1) / 2 - UiRenderer.textWidth(r.label()) / 2, ry + 4, TEXT);
                 }
                 case FOV_SLIDER -> drawFovSlider(g, x1, ry);
                 case SIZING -> drawSizing(g, x1, ry, hover);
@@ -379,8 +388,8 @@ public class TimelineScreen extends Screen {
     private void drawSizing(GuiGraphicsExtractor g, int x1, int ry, boolean hover) {
         int bx1 = x1 + 8;
         int bx2 = width - 8;
-        g.fill(bx1, ry, bx2, ry + 16, hover ? 0xFF33333B : BOX_BG);
-        g.fill(bx2 - 16, ry, bx2, ry + 16, hover ? BLUE_HOVER : BLUE);
+        g.fill(bx1, ry, bx2, ry + 16, hover ? ROW_PILL_HOVER : ROW_PILL);
+        g.fill(bx2 - 16, ry, bx2, ry + 16, TRACK_LABEL);
         triDown(g, bx2 - 8, ry + 6, 4, WHITE);
         UiRenderer.text(g, ReplayEditorState.sizing().label(), bx1 + 5, ry + 4, TEXT);
     }
@@ -390,8 +399,12 @@ public class TimelineScreen extends Screen {
         boolean collapsed = ReplayEditorState.timelineCollapsed();
         int shown = scrubbing ? scrubTick : ReplayPlayer.positionTicks();
 
-        g.fill(0, top, width, height, BG);
-        g.fill(0, top, width, top + 1, LINE);
+        g.fill(0, top, width, height, TL_BG);
+        g.fill(0, rulerTop(), LABEL_W, height, TL_SIDE);
+        g.fill(0, top, width, top + 1, DIVIDER);
+        // Header + transport strip are black, like the mockup.
+        g.fill(LABEL_W, top, width, rulerTop() + RULER_H, BG);
+        g.fill(0, top, LABEL_W, top + HEADER_H, BG);
         int tabW = drawTab(g, 6, top + 2, "Timeline", !collapsed, mx, my);
 
         // Header, right side: speed button and elapsed / total time.
@@ -429,7 +442,14 @@ public class TimelineScreen extends Screen {
         for (int i = 0; i < 5; i++) {
             int cellX = 6 + i * TRANSPORT_CELL_W;
             boolean hov = in(mx, my, cellX, rulerTop, TRANSPORT_CELL_W, RULER_H);
-            drawTransportIcon(g, i, cellX, rulerTop + RULER_H / 2, hov ? ICON_HOVER : WHITE);
+            if (i == 2) {
+                // Play/pause: red rounded pill with a white glyph (mockup).
+                UiRenderer.roundedRect(g, cellX - 1, rulerTop + 1, cellX + TRANSPORT_CELL_W + 1, rulerTop + RULER_H - 1, 4,
+                        hov ? 0xFFFF3A3A : PLAY_RED);
+                drawTransportIcon(g, i, cellX, rulerTop + RULER_H / 2, WHITE);
+            } else {
+                drawTransportIcon(g, i, cellX, rulerTop + RULER_H / 2, hov ? ICON_HOVER : WHITE);
+            }
         }
 
         drawRuler(g, rulerTop);
@@ -437,24 +457,27 @@ public class TimelineScreen extends Screen {
         // Track rows.
         for (int i = 0; i < n; i++) {
             int y0 = rowsTop + i * ROW_H;
-            g.fill(0, y0, width, y0 + 1, LINE);
-            UiRenderer.text(g, tracks.get(i).label(), 6, y0 + 4, TEXT);
+            g.fill(LABEL_W, y0, width, y0 + 1, 0xFF0B2A1F);
+            boolean rowHov = in(mx, my, 4, y0 + 1, rowButtonX(0) - 8, ROW_H - 2);
+            UiRenderer.roundedRect(g, 4, y0 + 1, rowButtonX(0) - 6, y0 + ROW_H - 1, 3, rowHov ? TRACK_LABEL_HOVER : TRACK_LABEL);
+            UiRenderer.text(g, tracks.get(i).label(), 10, y0 + 4, WHITE);
             for (int k = 0; k < 3; k++) {
                 int bx = rowButtonX(k);
                 int by = y0 + 2;
                 boolean hov = in(mx, my, bx, by, TRACK_BTN, TRACK_BTN);
-                g.fill(bx, by, bx + TRACK_BTN, by + TRACK_BTN, hov ? BLUE_HOVER : BLUE);
+                if (hov) {
+                    UiRenderer.roundedRect(g, bx, by, bx + TRACK_BTN, by + TRACK_BTN, 3, 0x40FFFFFF);
+                }
                 drawTrackIcon(g, k, bx, by);
             }
         }
-        g.fill(0, rowsTop + n * ROW_H, width, rowsTop + n * ROW_H + 1, LINE);
-        g.fill(LABEL_W, rulerTop, LABEL_W + 1, height, DIVIDER);
+        g.fill(LABEL_W, rulerTop, LABEL_W + 1, height, 0xFF0B2A1F);
 
         // Add Element button.
         if (n < ReplayEditorState.MAX_TRACKS) {
             int ay = addY();
             boolean hov = in(mx, my, 6, ay, addW(), ADD_H);
-            g.fill(6, ay, 6 + addW(), ay + ADD_H, hov ? BLUE_HOVER : BLUE);
+            UiRenderer.roundedRect(g, 6, ay, 6 + addW(), ay + ADD_H, 4, hov ? TRACK_LABEL_HOVER : TRACK_LABEL);
             UiRenderer.text(g, "Add Element", 12, ay + 3, WHITE);
         }
 
@@ -512,7 +535,7 @@ public class TimelineScreen extends Screen {
             int iy = y + 2 + i * 14;
             boolean hov = in(mx, my, x, iy, w, 14);
             if (hov) {
-                g.fill(x, iy, x + w, iy + 14, BLUE);
+                g.fill(x, iy, x + w, iy + 14, TRACK_LABEL);
             }
             UiRenderer.text(g, items[i].label(), x + 8, iy + 3, WHITE);
         }
@@ -521,13 +544,13 @@ public class TimelineScreen extends Screen {
     private int drawTab(GuiGraphicsExtractor g, int x, int y, String label, boolean expanded, int mx, int my) {
         int w = tabWidth(label);
         boolean hover = in(mx, my, x, y, w, HEADER_H - 2);
-        UiRenderer.roundedRect(g, x, y, x + w, y + HEADER_H - 2, 3, hover ? TAB_BG_HOVER : TAB_BG);
+        UiRenderer.roundedRect(g, x, y, x + w, y + HEADER_H - 2, 5, hover ? TAB_BG_HOVER : TAB_BG);
         if (expanded) {
-            triDown(g, x + 8, y + 5, 4, WHITE);
+            triDown(g, x + 8, y + 5, 4, 0xFF111111);
         } else {
-            triRight(g, x + 6, y + 7, 5, 9, WHITE);
+            triRight(g, x + 6, y + 7, 5, 9, 0xFF111111);
         }
-        UiRenderer.text(g, label, x + 16, y + 3, TEXT);
+        UiRenderer.text(g, label, x + 16, y + 3, 0xFF111111);
         return w;
     }
 
@@ -607,7 +630,7 @@ public class TimelineScreen extends Screen {
     }
 
     private static void drawCheckbox(GuiGraphicsExtractor g, int x, int y, boolean checked) {
-        g.fill(x, y, x + 11, y + 11, BOX_BG);
+        UiRenderer.roundedRect(g, x, y, x + 11, y + 11, 3, BOX_BG);
         if (checked) {
             int[][] path = {{2, 5}, {3, 6}, {4, 7}, {5, 6}, {6, 5}, {7, 4}, {8, 3}};
             for (int[] p : path) {
