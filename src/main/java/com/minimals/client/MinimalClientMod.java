@@ -42,6 +42,8 @@ public class MinimalClientMod implements ClientModInitializer {
     /** Places a waypoint. Separate from the Waypoints module's own on/off keybind in the ClickGUI. */
     private static KeyMapping addWaypointKey;
     public static boolean hudVisible = true;
+    /** True while the Sprint module is the one holding the sprint key down. */
+    private static boolean sprintHeldByModule;
 
     /** Modules whose keybind was already down last tick, so a held key toggles only once. */
     private static final Set<Module> HELD_KEYBINDS = new HashSet<>();
@@ -91,6 +93,12 @@ public class MinimalClientMod implements ClientModInitializer {
         );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            // Sprint module: press the vanilla sprint key while moving forward, no double-tap
+            // needed. Going through the key (instead of setSprinting) lets LocalPlayer apply its
+            // own rules: sneaking, using an item, riding, shallow water, low food, ...
+            // Runs first so the early returns below can never leave the key stuck down.
+            tickAutoSprint(client);
+
             if (MenuScreen.isTypingInMenu()) {
                 // Drain queued presses so they don't fire the moment the text field loses focus.
                 while (menuKey.consumeClick()) { }
@@ -130,14 +138,39 @@ public class MinimalClientMod implements ClientModInitializer {
 
             ModuleManager.keystrokes().tick();
 
-            // Sprint module: force sprint while moving forward, no double-tap needed.
-            if (ModuleManager.isEnabled("Sprint") && client.player != null) {
-                if (client.options.keyUp.isDown() && !client.player.isSprinting()
-                        && client.player.getFoodData().getFoodLevel() > 6) {
-                    client.player.setSprinting(true);
-                }
-            }
         });
+    }
+
+    /**
+     * Presses the sprint key for the player while Sprint is on and forward is held.
+     *
+     * Vanilla only changes {@code KeyMapping.isDown} on key events, never by polling, so a key we
+     * press stays down until we release it. We therefore release it only when WE pressed it
+     * ({@link #sprintHeldByModule}); if the player was already holding their own sprint key we
+     * never touch it, so their key keeps working.
+     */
+    private static void tickAutoSprint(Minecraft client) {
+        if (client.player == null) {
+            return;
+        }
+        KeyMapping sprintKey = client.options.keySprint;
+        boolean want = ModuleManager.isEnabled("Sprint")
+                && client.gui.screen() == null
+                && client.options.keyUp.isDown();
+        if (want) {
+            if (!sprintKey.isDown()) {
+                sprintKey.setDown(true);
+                sprintHeldByModule = true;
+            }
+        } else if (sprintHeldByModule) {
+            sprintKey.setDown(false);
+            sprintHeldByModule = false;
+        }
+        // Opening a screen makes vanilla call KeyMapping.releaseAll(), which already cleared the
+        // key. Drop our claim on it then, or a later release would clobber the player's own press.
+        if (sprintHeldByModule && !sprintKey.isDown()) {
+            sprintHeldByModule = false;
+        }
     }
 
     /**

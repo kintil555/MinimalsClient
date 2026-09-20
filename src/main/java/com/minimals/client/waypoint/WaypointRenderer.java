@@ -9,6 +9,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.joml.Vector3fc;
 
 import java.util.HashMap;
@@ -50,9 +52,16 @@ public final class WaypointRenderer {
         String coordsText = "";
     }
 
+    /** Distance in pixels over which a marker fades out before the screen edge. */
+    private static final float EDGE_FADE = 24f;
+
+    /** Scratch objects reused every frame; only the client thread renders. */
+    private static final Matrix4f VIEW_PROJ = new Matrix4f();
+    private static final Vector3f PROJECTED = new Vector3f();
+
     private static final Map<Long, Label> LABELS = new HashMap<>();
     /** Set whenever the waypoint list could have changed, so stale cache entries are pruned. */
-    private static int lastListIdentity;
+    private static List<Waypoint> lastList;
 
     private WaypointRenderer() {
     }
@@ -78,7 +87,6 @@ public final class WaypointRenderer {
         Camera camera = mc.gameRenderer.mainCamera();
         Vec3 cameraPos = camera.position();
         Vector3fc forward = camera.forwardVector();
-        Vec3 playerPos = mc.player.position();
 
         double maxDist = module.maxDistance.get();
         double maxDistSqr = maxDist * maxDist;
@@ -86,54 +94,71 @@ public final class WaypointRenderer {
         int guiH = graphics.guiHeight();
         float scale = module.scale.get() / 100f;
         Font font = mc.font;
+        // Built once per frame; the camera does not change between waypoints.
+        Matrix4f viewProj = camera.getViewRotationProjectionMatrix(VIEW_PROJ);
 
         for (Waypoint w : waypoints) {
             double cx = w.x() + 0.5;
             double cy = w.y() + 0.5;
             double cz = w.z() + 0.5;
 
-            double dx = cx - playerPos.x;
-            double dy = cy - playerPos.y;
-            double dz = cz - playerPos.z;
-            double distSqr = dx * dx + dy * dy + dz * dz;
+            // Everything below is measured from the camera, which is interpolated per frame.
+            // The player position only changes every tick (20 Hz), so using it made the
+            // distance text jump while the icon moved smoothly.
+            double vx = cx - cameraPos.x;
+            double vy = cy - cameraPos.y;
+            double vz = cz - cameraPos.z;
+            double distSqr = vx * vx + vy * vy + vz * vz;
             if (distSqr > maxDistSqr) {
                 continue;
             }
 
             // In front of the camera? One dot product against the camera's forward axis.
-            double vx = cx - cameraPos.x;
-            double vy = cy - cameraPos.y;
-            double vz = cz - cameraPos.z;
             if (vx * forward.x() + vy * forward.y() + vz * forward.z() <= 0.05) {
                 continue;
             }
 
-            Vec3 ndc = mc.gameRenderer.projectPointToScreen(new Vec3(cx, cy, cz));
-            float sx = ndcToScreenX(ndc.x, guiW);
-            float sy = ndcToScreenY(ndc.y, guiH);
-            if (sx < EDGE || sx > guiW - EDGE || sy < EDGE || sy > guiH - EDGE) {
+            // Same maths as GameRenderer.projectPointToScreen, but with one shared vector
+            // instead of a new Vec3 + Vector3f per waypoint per frame.
+            PROJECTED.set((float) vx, (float) vy, (float) vz);
+            viewProj.transformProject(PROJECTED);
+            float sx = ndcToScreenX(PROJECTED.x, guiW);
+            float sy = ndcToScreenY(PROJECTED.y, guiH);
+
+            // Fade out over the last EDGE_FADE pixels instead of popping off at the border.
+            float edgeAlpha = edgeAlpha(sx, sy, guiW, guiH);
+            if (edgeAlpha <= 0f) {
                 continue;
             }
 
             int distance = (int) Math.round(Math.sqrt(distSqr));
-            Label label = LABELS.computeIfAbsent(w.id(), id -> new Label());
+            Label label = LABELS.get(w.id());
+            if (label == null) {
+                label = new Label();
+                LABELS.put(w.id(), label);
+            }
             if (label.distance != distance) {
                 label.distance = distance;
                 label.distanceText = distance + "m";
                 label.coordsText = w.x() + ", " + w.y() + ", " + w.z();
             }
 
-            drawMarker(graphics, font, module, w, label, sx, sy, scale);
+            drawMarker(graphics, font, module, w, label, sx, sy, scale, edgeAlpha);
         }
     }
 
     private static void drawMarker(GuiGraphicsExtractor graphics, Font font, WaypointModule module,
-                                   Waypoint w, Label label, float sx, float sy, float scale) {
+                                   Waypoint w, Label label, float sx, float sy, float scale, float alpha) {
         int lineH = font.lineHeight;
-        int iconColor = ARGB.opaque(w.color());
+        int iconColor = ARGB.color(Math.round(alpha * 255f), w.color());
+        int primary = ARGB.multiplyAlpha(TEXT_PRIMARY, alpha);
+        int secondary = ARGB.multiplyAlpha(TEXT_SECONDARY, alpha);
+        int backdrop = ARGB.multiplyAlpha(BACKDROP, alpha);
 
         graphics.pose().pushMatrix();
-        graphics.pose().translate(sx, sy);
+        // Whole pixels only. Icon and text are drawn on an integer grid, so a fractional
+        // translate makes them land on different sub-pixels frame to frame and shimmer.
+        graphics.pose().translate(Math.round(sx), Math.round(sy));
         graphics.pose().scale(scale, scale);
 
         // Icon centred on the projected point.
@@ -145,25 +170,35 @@ public final class WaypointRenderer {
         // Text block under the icon: name, then distance, then coordinates.
         int textY = iconY + ICON_DRAW + PAD;
         if (module.showName.get() && !w.name().isEmpty()) {
-            textY = drawCentered(graphics, font, w.name(), textY, iconColor, lineH);
+            textY = drawCentered(graphics, font, w.name(), textY, iconColor, lineH, backdrop);
         }
         if (module.showDistance.get()) {
-            textY = drawCentered(graphics, font, label.distanceText, textY, TEXT_PRIMARY, lineH);
+            textY = drawCentered(graphics, font, label.distanceText, textY, primary, lineH, backdrop);
         }
         if (module.showCoords.get()) {
-            drawCentered(graphics, font, label.coordsText, textY, TEXT_SECONDARY, lineH);
+            drawCentered(graphics, font, label.coordsText, textY, secondary, lineH, backdrop);
         }
 
         graphics.pose().popMatrix();
     }
 
     /** Draws one line centred on x=0 over a soft backdrop and returns the y of the next line. */
-    private static int drawCentered(GuiGraphicsExtractor graphics, Font font, String text, int y, int color, int lineH) {
+    private static int drawCentered(GuiGraphicsExtractor graphics, Font font, String text, int y, int color,
+                                    int lineH, int backdrop) {
         int w = font.width(text);
         int x = -w / 2;
-        graphics.fill(x - 2, y - 1, x + w + 2, y + lineH, BACKDROP);
+        graphics.fill(x - 2, y - 1, x + w + 2, y + lineH, backdrop);
         graphics.text(font, text, x, y, color, false);
         return y + lineH + LINE_GAP;
+    }
+
+    /** 1 in the middle of the screen, fading to 0 at EDGE pixels from the border. */
+    private static float edgeAlpha(float sx, float sy, int guiW, int guiH) {
+        float nearest = Math.min(Math.min(sx, guiW - sx), Math.min(sy, guiH - sy)) - EDGE;
+        if (nearest <= 0f) {
+            return 0f;
+        }
+        return nearest >= EDGE_FADE ? 1f : nearest / EDGE_FADE;
     }
 
     /** NDC x in [-1, 1] (left to right) to GUI pixels. */
@@ -178,18 +213,16 @@ public final class WaypointRenderer {
 
     /** Drops cached labels of waypoints that no longer exist (deleted, other world/dimension). */
     private static void pruneCache(List<Waypoint> current) {
-        int identity = System.identityHashCode(current);
-        if (identity == lastListIdentity) {
+        // WaypointManager publishes a new immutable list whenever anything changes, so a
+        // reference check is exact. (identityHashCode can collide and skip a prune.)
+        if (current == lastList) {
             return;
         }
-        lastListIdentity = identity;
-        LABELS.keySet().removeIf(id -> {
-            for (Waypoint w : current) {
-                if (w.id() == id) {
-                    return false;
-                }
-            }
-            return true;
-        });
+        lastList = current;
+        java.util.Set<Long> alive = new java.util.HashSet<>();
+        for (Waypoint w : current) {
+            alive.add(w.id());
+        }
+        LABELS.keySet().retainAll(alive);
     }
 }

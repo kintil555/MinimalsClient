@@ -1,12 +1,13 @@
 package com.minimals.client.waypoint;
 
 import com.minimals.client.ui.UiRenderer;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.input.InputWithModifiers;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
@@ -17,7 +18,8 @@ import java.util.List;
 /**
  * The waypoint manager screen. Two tabs: "This Dimension" (what the world overlay shows right
  * now) and "All" (every waypoint saved for this world, with its dimension). Rows scroll with the
- * mouse wheel; each row can be deleted (two clicks) and "Add Here" opens the create dialog at
+ * mouse wheel; each row can be deleted (an "x" opens a confirmation dialog in the middle of
+ * the panel) and "Add Here" opens the create dialog at
  * the player's position. Opened from the Waypoints button in the ClickGUI header.
  */
 public class WaypointListScreen extends Screen {
@@ -33,6 +35,13 @@ public class WaypointListScreen extends Screen {
     private static final int ROW_GAP = 4;
     private static final int SCROLL_STEP = 16;
     private static final int FOOTER_H = 34;
+
+    private static final int DIALOG_W = 220;
+    private static final int DIALOG_H = 92;
+    private static final int DIALOG_BTN_H = 20;
+    private static final int DIALOG_BTN_GAP = 8;
+    private static final int DANGER = 0xFFFF5555;
+    private static final int DANGER_HOVER = 0xFFFF7777;
 
     private enum Tab {
         DIMENSION("This Dimension"),
@@ -53,6 +62,8 @@ public class WaypointListScreen extends Screen {
     private final List<Integer> rowBaseY = new ArrayList<>();
     private int scrollOffset;
     private int contentHeight;
+    /** Waypoint the confirmation dialog is asking about; null while no dialog is open. */
+    private Waypoint pendingDelete;
 
     public WaypointListScreen(Screen returnTo) {
         super(Component.literal("Waypoints"));
@@ -134,11 +145,8 @@ public class WaypointListScreen extends Screen {
             if (activeTab == Tab.ALL) {
                 subtitle += "  " + shortDimension(waypoint.dimension());
             }
-            long id = waypoint.id();
-            WaypointRowWidget row = new WaypointRowWidget(x, y, w, ROW_H, waypoint, distance, subtitle, () -> {
-                WaypointManager.remove(Minecraft.getInstance(), id);
-                rebuildRows();
-            });
+            WaypointRowWidget row = new WaypointRowWidget(x, y, w, ROW_H, waypoint, distance, subtitle,
+                    () -> pendingDelete = waypoint);
             addRenderableWidget(row);
             rows.add(row);
             rowBaseY.add(y);
@@ -177,6 +185,9 @@ public class WaypointListScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (pendingDelete != null) {
+            return true;
+        }
         if (maxScroll() > 0) {
             scrollOffset -= (int) Math.signum(scrollY) * SCROLL_STEP;
             clampScroll();
@@ -188,6 +199,19 @@ public class WaypointListScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // The dialog is modal: it swallows every click so nothing behind it can be pressed.
+        if (pendingDelete != null) {
+            if (event.button() == 0) {
+                if (inside(event.x(), event.y(), deleteBtnX(), dialogBtnY(), dialogBtnW(), DIALOG_BTN_H)) {
+                    confirmDelete();
+                } else if (inside(event.x(), event.y(), cancelBtnX(), dialogBtnY(), dialogBtnW(), DIALOG_BTN_H)
+                        || !inside(event.x(), event.y(), dialogX(), dialogY(), DIALOG_W, DIALOG_H)) {
+                    // Cancel, or a click outside the dialog.
+                    pendingDelete = null;
+                }
+            }
+            return true;
+        }
         Tab[] tabs = Tab.values();
         int tabY = panelY() + HEADER_H;
         for (int i = 0; i < tabs.length; i++) {
@@ -204,8 +228,66 @@ public class WaypointListScreen extends Screen {
         return super.mouseClicked(event, doubleClick);
     }
 
+    private int dialogX() {
+        return panelX() + (PANEL_W - DIALOG_W) / 2;
+    }
+
+    private int dialogY() {
+        return panelY() + (PANEL_H - DIALOG_H) / 2;
+    }
+
+    private int dialogBtnW() {
+        return (DIALOG_W - PAD * 2 - DIALOG_BTN_GAP) / 2;
+    }
+
+    private int dialogBtnY() {
+        return dialogY() + DIALOG_H - PAD - DIALOG_BTN_H;
+    }
+
+    private int cancelBtnX() {
+        return dialogX() + PAD;
+    }
+
+    private int deleteBtnX() {
+        return dialogX() + PAD + dialogBtnW() + DIALOG_BTN_GAP;
+    }
+
+    private static boolean inside(double mx, double my, int x, int y, int w, int h) {
+        return mx >= x && mx < x + w && my >= y && my < y + h;
+    }
+
+    private void confirmDelete() {
+        Waypoint target = pendingDelete;
+        pendingDelete = null;
+        if (target != null) {
+            WaypointManager.remove(Minecraft.getInstance(), target.id());
+            rebuildRows();
+        }
+    }
+
     private int tabX(int index) {
         return panelX() + PAD + index * (TAB_W + 6);
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (pendingDelete != null) {
+            int key = event.key();
+            if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
+                confirmDelete();
+            } else if (key == InputConstants.KEY_ESCAPE) {
+                pendingDelete = null;
+            }
+            // Swallow everything else too, so Tab/Enter cannot reach the buttons behind.
+            return true;
+        }
+        return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        // While the dialog is open ESC only dismisses the dialog (handled in keyPressed).
+        return pendingDelete == null;
     }
 
     @Override
@@ -256,6 +338,64 @@ public class WaypointListScreen extends Screen {
                     viewportTop() + 20, UiRenderer.TEXT_SECONDARY);
         }
 
-        super.extractRenderState(graphics, mouseX, mouseY, delta);
+        // Widgets behind a modal dialog must not light up under the cursor.
+        boolean modal = pendingDelete != null;
+        int hoverX = modal ? -1 : mouseX;
+        int hoverY = modal ? -1 : mouseY;
+
+        super.extractRenderState(graphics, hoverX, hoverY, delta);
+
+        if (modal) {
+            drawDeleteDialog(graphics, mouseX, mouseY);
+        }
+    }
+
+    /** Centred confirmation card over a dimmed panel; drawn after all widgets so it is on top. */
+    private void drawDeleteDialog(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        int px = panelX();
+        int py = panelY();
+        // Dim only the panel (rounded like it), so the dialog reads as belonging to it.
+        UiRenderer.roundedRect(graphics, px, py, px + PANEL_W, py + PANEL_H, PANEL_RADIUS, 0xAA000000);
+
+        int dx = dialogX();
+        int dy = dialogY();
+        UiRenderer.roundedRect(graphics, dx, dy, dx + DIALOG_W, dy + DIALOG_H, 8, UiRenderer.HEADER_BTN_BG);
+        graphics.fill(dx + 10, dy + 10, dx + 13, dy + 24, DANGER);
+
+        String title = "Delete waypoint?";
+        UiRenderer.text(graphics, title, dx + 20, dy + 13, UiRenderer.TEXT_PRIMARY);
+
+        String name = pendingDelete.name().isEmpty() ? "(unnamed)" : pendingDelete.name();
+        String line = clipText(name, DIALOG_W - PAD * 2);
+        UiRenderer.text(graphics, line, dx + (DIALOG_W - UiRenderer.textWidth(line)) / 2, dy + 38,
+                UiRenderer.TEXT_SECONDARY);
+
+        int by = dialogBtnY();
+        int bw = dialogBtnW();
+        boolean overCancel = inside(mouseX, mouseY, cancelBtnX(), by, bw, DIALOG_BTN_H);
+        boolean overDelete = inside(mouseX, mouseY, deleteBtnX(), by, bw, DIALOG_BTN_H);
+
+        UiRenderer.roundedRect(graphics, cancelBtnX(), by, cancelBtnX() + bw, by + DIALOG_BTN_H, 5,
+                overCancel ? UiRenderer.HEADER_BTN_BG : UiRenderer.PANEL_BG);
+        UiRenderer.text(graphics, "Cancel", cancelBtnX() + (bw - UiRenderer.textWidth("Cancel")) / 2,
+                by + (DIALOG_BTN_H - 8) / 2, UiRenderer.TEXT_PRIMARY);
+
+        UiRenderer.roundedRect(graphics, deleteBtnX(), by, deleteBtnX() + bw, by + DIALOG_BTN_H, 5,
+                overDelete ? DANGER_HOVER : DANGER);
+        UiRenderer.text(graphics, "Delete", deleteBtnX() + (bw - UiRenderer.textWidth("Delete")) / 2,
+                by + (DIALOG_BTN_H - 8) / 2, 0xFFFFFFFF);
+    }
+
+    /** Shortens text with "..." until it fits in maxWidth pixels. */
+    private static String clipText(String text, int maxWidth) {
+        if (UiRenderer.textWidth(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = "...";
+        int end = text.length();
+        while (end > 0 && UiRenderer.textWidth(text.substring(0, end) + ellipsis) > maxWidth) {
+            end--;
+        }
+        return text.substring(0, end) + ellipsis;
     }
 }

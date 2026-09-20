@@ -12,8 +12,8 @@ import net.minecraft.util.ARGB;
 /**
  * One row of the waypoint list: coloured icon, name, coordinates (plus dimension on the "All"
  * tab) and, at the right edge, a delete button. Clicking the body does nothing on purpose so a
- * stray click can never remove anything; only the small "x" zone deletes, and it needs a
- * second click (the row shows "Sure?" first).
+ * stray click can never remove anything; the small "x" zone only asks the screen to open its
+ * confirmation dialog, it never deletes by itself.
  */
 public class WaypointRowWidget extends Button {
 
@@ -24,18 +24,15 @@ public class WaypointRowWidget extends Button {
     /** Text for the distance column; empty when the waypoint is in another dimension. */
     private final String distanceText;
     private final String subtitle;
-    private final Runnable onDelete;
-
-    /** True after the first click on the delete zone; the next one confirms. */
-    private boolean confirming;
+    private final Runnable onRequestDelete;
 
     public WaypointRowWidget(int x, int y, int width, int height, Waypoint waypoint,
-                             String distanceText, String subtitle, Runnable onDelete) {
+                             String distanceText, String subtitle, Runnable onRequestDelete) {
         super(x, y, width, height, Component.literal(waypoint.name()), btn -> { }, DEFAULT_NARRATION);
         this.waypoint = waypoint;
         this.distanceText = distanceText;
         this.subtitle = subtitle;
-        this.onDelete = onDelete;
+        this.onRequestDelete = onRequestDelete;
     }
 
     private boolean isInDeleteZone(double mouseX) {
@@ -49,14 +46,8 @@ public class WaypointRowWidget extends Button {
 
     @Override
     public void onClick(MouseButtonEvent event, boolean doubleClick) {
-        if (!isInDeleteZone(event.x())) {
-            confirming = false;
-            return;
-        }
-        if (confirming) {
-            onDelete.run();
-        } else {
-            confirming = true;
+        if (isInDeleteZone(event.x())) {
+            onRequestDelete.run();
         }
     }
 
@@ -67,9 +58,6 @@ public class WaypointRowWidget extends Button {
         boolean hovered = isHovered();
         if (hovered) {
             UiRenderer.roundedRect(graphics, getX(), getY(), getX() + w, getY() + h, 6, UiRenderer.ROW_BG_HOVER);
-        } else {
-            // Leaving the row cancels a pending delete confirmation.
-            confirming = false;
         }
 
         int iconY = getY() + (h - WaypointIcon.SIZE) / 2;
@@ -92,8 +80,8 @@ public class WaypointRowWidget extends Button {
         }
 
         boolean overDelete = hovered && isInDeleteZone(mouseX);
-        String label = confirming ? "Sure?" : "x";
-        int color = confirming ? 0xFFFF5555 : overDelete ? 0xFFFF5555 : UiRenderer.TEXT_SECONDARY;
+        String label = "x";
+        int color = overDelete ? 0xFFFF5555 : UiRenderer.TEXT_SECONDARY;
         int labelX = getX() + w - DELETE_ZONE_W + (DELETE_ZONE_W - UiRenderer.textWidth(label)) / 2;
         UiRenderer.text(graphics, label, labelX, getY() + (h - 8) / 2, color);
     }
