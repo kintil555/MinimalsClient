@@ -9,6 +9,10 @@ import com.minimals.client.ui.hud.HudRegistry;
 import com.minimals.client.ui.hud.KeystrokeElement;
 import com.minimals.client.ui.hud.SpearMomentumElement;
 import com.minimals.client.ui.hud.WailaElement;
+import com.minimals.client.waypoint.WaypointCreateScreen;
+import com.minimals.client.waypoint.WaypointIcon;
+import com.minimals.client.waypoint.WaypointManager;
+import com.minimals.client.waypoint.WaypointRenderer;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -35,6 +39,8 @@ public class MinimalClientMod implements ClientModInitializer {
     private static KeyMapping menuKey;
     private static KeyMapping hudToggleKey;
     private static KeyMapping hudEditorKey;
+    /** Places a waypoint. Separate from the Waypoints module's own on/off keybind in the ClickGUI. */
+    private static KeyMapping addWaypointKey;
     public static boolean hudVisible = true;
 
     /** Modules whose keybind was already down last tick, so a held key toggles only once. */
@@ -60,6 +66,13 @@ public class MinimalClientMod implements ClientModInitializer {
                 "key.minimals.hud_editor",
                 InputConstants.Type.KEYSYM,
                 InputConstants.KEY_J,
+                CATEGORY
+        ));
+
+        addWaypointKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.minimals.add_waypoint",
+                InputConstants.Type.KEYSYM,
+                InputConstants.KEY_B,
                 CATEGORY
         ));
 
@@ -103,6 +116,17 @@ public class MinimalClientMod implements ClientModInitializer {
             }
 
             pollModuleKeybinds(client);
+
+            // Keeps the waypoint list matched to the current world/dimension (cheap when unchanged).
+            WaypointManager.sync(client);
+            while (addWaypointKey.consumeClick()) {
+                if (client.gui.screen() == null && client.player != null && client.level != null
+                        && ModuleManager.waypoints().isEnabled()) {
+                    client.gui.setScreen(new WaypointCreateScreen(null,
+                            client.player.getBlockX(), client.player.getBlockY(), client.player.getBlockZ(),
+                            "", WaypointIcon.LOCATE));
+                }
+            }
 
             ModuleManager.keystrokes().tick();
 
@@ -163,6 +187,7 @@ public class MinimalClientMod implements ClientModInitializer {
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         if (!hudVisible) return;
+        WaypointRenderer.render(graphics);
         // While the HUD editor is open it draws every element itself (smoothly, following the
         // cursor). Drawing them here too would show a second, laggier copy underneath.
         if (Minecraft.getInstance().gui.screen() instanceof HudEditorScreen) return;

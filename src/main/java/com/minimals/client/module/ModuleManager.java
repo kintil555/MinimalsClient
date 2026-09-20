@@ -28,6 +28,7 @@ public class ModuleManager {
         register(new SnapPerspectiveModule());
         register(new ShulkerPreviewModule());
         register(new WailaModule());
+        register(new WaypointModule());
 
         register(new OptimizationModule());
         register(new CrystalOptimizerModule());
@@ -119,6 +120,15 @@ public class ModuleManager {
             }
         }
         throw new IllegalStateException("WailaModule is not registered");
+    }
+
+    public static WaypointModule waypoints() {
+        for (Module m : MODULES) {
+            if (m instanceof WaypointModule module) {
+                return module;
+            }
+        }
+        throw new IllegalStateException("WaypointModule is not registered");
     }
 
     public static SpearMomentumModule spearMomentum() {

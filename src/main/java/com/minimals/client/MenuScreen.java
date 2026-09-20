@@ -18,6 +18,7 @@ import com.minimals.client.ui.SettingRowWidget;
 import com.minimals.client.ui.TextFieldRowWidget;
 import com.minimals.client.ui.UiRenderer;
 import com.minimals.client.ui.hud.HudEditorScreen;
+import com.minimals.client.waypoint.WaypointListScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -119,10 +120,18 @@ public class MenuScreen extends Screen {
         int headerX = px + SIDEBAR_W + CONTENT_PADDING;
         int headerRight = px + PANEL_W - CONTENT_PADDING;
         int headerY = py + (HEADER_H - HEADER_BTN) / 2;
-        int searchW = headerRight - headerX - HEADER_BTN - ROW_GAP * 2;
+        // Two icon buttons at the right (HUD editor, Waypoints); the search box takes the rest.
+        int searchW = headerRight - headerX - (HEADER_BTN + ROW_GAP) * 2;
         searchField = new SearchFieldWidget(headerX, headerY, searchW, HEADER_BTN, searchQuery, this::onSearchChanged);
         addRenderableWidget(searchField);
         chromeWidgets.add(searchField);
+
+        HeaderIconButtonWidget waypoints = new HeaderIconButtonWidget(
+                headerRight - HEADER_BTN * 2 - ROW_GAP, headerY, HEADER_BTN,
+                "waypoint/locate", "Waypoints",
+                () -> Minecraft.getInstance().gui.setScreen(new WaypointListScreen(this)));
+        addRenderableWidget(waypoints);
+        chromeWidgets.add(waypoints);
 
         HeaderIconButtonWidget hudEditor = new HeaderIconButtonWidget(
                 headerRight - HEADER_BTN, headerY, HEADER_BTN,

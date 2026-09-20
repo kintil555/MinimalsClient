@@ -22,7 +22,8 @@
     "FireOverlayMixin",
     "ShulkerItemStackMixin",
     "ShulkerTooltipMixin",
-    "ShulkerContainerScreenMixin"
+    "ShulkerContainerScreenMixin",
+    "DeathScreenMixin"
   ],
   "mixins": [
     "PathNavigationMixin"
