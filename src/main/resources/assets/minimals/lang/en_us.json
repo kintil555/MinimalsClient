@@ -4,5 +4,6 @@
   "key.minimals.toggle_hud": "Toggle HUD",
   "key.minimals.hud_editor": "HUD Editor",
   "key.minimals.add_waypoint": "Add Waypoint",
-  "key.minimals.exit_spectate": "Exit Spectate"
+  "key.minimals.exit_spectate": "Exit Spectate",
+  "key.minimals.replay_timeline": "Replay Timeline"
 }

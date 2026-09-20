@@ -2,6 +2,10 @@ package com.minimals.client;
 
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
+import com.minimals.client.replay.ReplayHud;
+import com.minimals.client.replay.ReplayPlayer;
+import com.minimals.client.replay.ReplayRecorder;
+import com.minimals.client.replay.TimelineScreen;
 import com.minimals.client.spectate.MenuChoiceScreen;
 import com.minimals.client.spectate.SpectateManager;
 import com.minimals.client.ui.hud.ArraylistElement;
@@ -34,6 +38,7 @@ import java.util.Set;
 public class MinimalClientMod implements ClientModInitializer {
 
     public static final String MOD_ID = "minimals";
+    public static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(MOD_ID);
 
     private static final KeyMapping.Category CATEGORY =
             KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "category"));
@@ -45,6 +50,8 @@ public class MinimalClientMod implements ClientModInitializer {
     private static KeyMapping addWaypointKey;
     /** Leaves spectate. Own keybind (default Q), so it never shares state with vanilla Drop Item. */
     private static KeyMapping exitSpectateKey;
+    /** Opens the replay timeline bar while a replay is playing. */
+    private static KeyMapping replayTimelineKey;
     public static boolean hudVisible = true;
     /** True while the Sprint module is the one holding the sprint key down. */
     private static boolean sprintHeldByModule;
@@ -90,6 +97,13 @@ public class MinimalClientMod implements ClientModInitializer {
         ));
         SpectateManager.setExitKey(exitSpectateKey);
 
+        replayTimelineKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.minimals.replay_timeline",
+                InputConstants.Type.KEYSYM,
+                InputConstants.KEY_R,
+                CATEGORY
+        ));
+
         HudRegistry.register(new ArraylistElement());
         HudRegistry.register(new KeystrokeElement());
         HudRegistry.register(new WailaElement());
@@ -111,6 +125,8 @@ public class MinimalClientMod implements ClientModInitializer {
             // Runs first so the early returns below can never leave the key stuck down.
             tickAutoSprint(client);
             SpectateManager.tick(client);
+            ReplayRecorder.tick();
+            ReplayPlayer.tick();
 
             if (MenuScreen.isTypingInMenu()) {
                 // Drain queued presses so they don't fire the moment the text field loses focus.
@@ -129,6 +145,11 @@ public class MinimalClientMod implements ClientModInitializer {
             }
             while (hudToggleKey.consumeClick()) {
                 hudVisible = !hudVisible;
+            }
+            while (replayTimelineKey.consumeClick()) {
+                if (ReplayPlayer.isInWorld() && client.gui.screen() == null) {
+                    client.gui.setScreen(new TimelineScreen());
+                }
             }
             while (hudEditorKey.consumeClick()) {
                 if (client.gui.screen() == null) {
@@ -236,6 +257,7 @@ public class MinimalClientMod implements ClientModInitializer {
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         renderSpectateHint(graphics);
+        ReplayHud.render(graphics);
         if (!hudVisible) return;
         WaypointRenderer.render(graphics);
         // While the HUD editor is open it draws every element itself (smoothly, following the

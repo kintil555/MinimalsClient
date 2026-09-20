@@ -23,7 +23,15 @@
     "ShulkerItemStackMixin",
     "ShulkerTooltipMixin",
     "ShulkerContainerScreenMixin",
-    "DeathScreenMixin"
+    "DeathScreenMixin",
+    "ConnectionMixin",
+    "ConnectionAccessor",
+    "MinecraftAccessor",
+    "MinecraftMixin",
+    "TitleScreenMixin",
+    "ReplayGameModeMixin",
+    "ReplayPositionMixin",
+    "ReplayCameraMixin"
   ],
   "mixins": [
     "PathNavigationMixin"
