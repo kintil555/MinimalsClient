@@ -35,6 +35,7 @@
     "ReplayWorldPhaseMixin",
     "SkyRendererAccessor",
     "ReplayDarkDiscMixin",
+    "ReplayScreenGuardMixin",
     "ReplayCameraAspectMixin",
     "ReplayBobMixin",
     "ReplayLocalPacketsMixin",
