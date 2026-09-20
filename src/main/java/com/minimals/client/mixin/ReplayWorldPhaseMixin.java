@@ -35,6 +35,8 @@ public abstract class ReplayWorldPhaseMixin {
     private net.minecraft.client.renderer.state.GameRenderState gameRenderState;
 
     private static boolean minimals$logged;
+    private static int minimals$logFog = 5;
+    private static long minimals$lastFogLog;
 
     private SkyRendererAccessor minimals$sky;
     private RenderTarget minimals$skyTarget;
@@ -55,6 +57,18 @@ public abstract class ReplayWorldPhaseMixin {
             org.slf4j.LoggerFactory.getLogger("minimals").info("Replay viewport active: {}x{} px, area {}x{} gui",
                     ReplayViewportTarget.pixelW(), ReplayViewportTarget.pixelH(),
                     (int) ReplayEditorLayout.areaW(), (int) ReplayEditorLayout.areaH());
+        }
+        if (minimals$logFog > 0 && (System.currentTimeMillis() - minimals$lastFogLog) > 3000) {
+            minimals$logFog--;
+            minimals$lastFogLog = System.currentTimeMillis();
+            var cs = this.gameRenderState.levelRenderState.cameraRenderState;
+            var fd = cs.fogData;
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            org.slf4j.LoggerFactory.getLogger("minimals").info(
+                    "Replay fog: color={} envStart={} envEnd={} rdStart={} rdEnd={} skyEnd={} camY={} renderDist={} chunks={}",
+                    fd.color, fd.environmentalStart, fd.environmentalEnd, fd.renderDistanceStart, fd.renderDistanceEnd,
+                    fd.skyEnd, cs.pos.y, mc.options.getEffectiveRenderDistance(),
+                    mc.level == null ? -1 : mc.level.getChunkSource().getLoadedChunksCount());
         }
         minimals$realTarget = this.mainRenderTarget;
         RenderTarget vp = ReplayViewportTarget.acquire();
