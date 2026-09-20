@@ -40,6 +40,8 @@
     "ReplayCameraAspectMixin",
     "ReplayBobMixin",
     "ReplayLocalPacketsMixin",
+    "ReplayCameraPhysicsMixin",
+    "ReplayNoGravityMixin",
     "ReplayRemotePlayerMixin",
     "ReplayFreezeMixin",
     "ReplaySkinLayersMixin",

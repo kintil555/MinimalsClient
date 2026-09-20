@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundAnimatePacket;
 import net.minecraft.network.protocol.game.ClientboundHurtAnimationPacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerCombatKillPacket;
 import net.minecraft.network.protocol.game.ClientboundRemoveMobEffectPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
@@ -20,8 +21,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * In a replay the LocalPlayer is only the free camera. Packets that describe the RECORDED player
  * (which shares that entity id) must not touch it: entity data (pose, sprint), attributes and
- * effects (FOV / speed), animations, motion, health and the death screen. The recorded player is
- * shown by ReplayRemotePlayer instead.
+ * effects (FOV / speed), animations, motion, health, the death screen and PlayerAbilities (the
+ * recorded survival abilities would switch the camera's flight off, see ReplayCameraPhysicsMixin).
+ * The recorded player is shown by ReplayRemotePlayer instead.
  */
 @Mixin(ClientPacketListener.class)
 public abstract class ReplayLocalPacketsMixin {
@@ -89,6 +91,13 @@ public abstract class ReplayLocalPacketsMixin {
 
     @Inject(method = "handlePlayerCombatKill", at = @At("HEAD"), cancellable = true)
     private void minimals$deathScreen(ClientboundPlayerCombatKillPacket packet, CallbackInfo ci) {
+        if (ReplayPlayer.isActive()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "handlePlayerAbilities", at = @At("HEAD"), cancellable = true)
+    private void minimals$abilities(ClientboundPlayerAbilitiesPacket packet, CallbackInfo ci) {
         if (ReplayPlayer.isActive()) {
             ci.cancel();
         }
