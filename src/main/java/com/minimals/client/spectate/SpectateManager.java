@@ -1,5 +1,6 @@
 package com.minimals.client.spectate;
 
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -19,8 +20,13 @@ public final class SpectateManager {
     /** Ticks spent waiting for the target entity/chunk to exist on the client. */
     private static int loadingTicks;
     private static boolean cameraApplied;
+    private static KeyMapping exitKey;
 
     private SpectateManager() {
+    }
+
+    public static void setExitKey(KeyMapping key) {
+        exitKey = key;
     }
 
     public static boolean isSpectating() {
@@ -73,9 +79,13 @@ public final class SpectateManager {
             return;
         }
 
-        // Q exits, but never while a screen is open (typing "q" in the search box, chat, ...).
-        if (mc.gui.screen() == null && com.mojang.blaze3d.platform.InputConstants
-                .isKeyDown(mc.getWindow(), com.mojang.blaze3d.platform.InputConstants.KEY_Q)) {
+        // Vanilla gameplay keys are dead while spectating: release held ones and drop queued
+        // presses so nothing fires (drop item, swap hand, attack/use, WASD, jump, sneak...).
+        blockVanillaInput(mc);
+
+        // Own keybind (default Q). consumeClick() is per-KeyMapping, so it can never
+        // interfere with the vanilla Drop Item binding even though both default to Q.
+        if (exitKey != null && exitKey.consumeClick() && mc.gui.screen() == null) {
             stop();
             return;
         }
@@ -98,6 +108,25 @@ public final class SpectateManager {
             mc.setCameraEntity(target);
         }
         cameraApplied = true;
+    }
+
+    private static void blockVanillaInput(Minecraft mc) {
+        var o = mc.options;
+        KeyMapping[] blocked = {
+                o.keyUp, o.keyDown, o.keyLeft, o.keyRight, o.keyJump, o.keyShift, o.keySprint,
+                o.keyDrop, o.keySwapOffhand, o.keyUse, o.keyAttack, o.keyPickItem
+        };
+        for (KeyMapping key : blocked) {
+            key.setDown(false);
+            while (key.consumeClick()) {
+                // discard queued presses
+            }
+        }
+        for (KeyMapping hotbar : o.keyHotbarSlots) {
+            while (hotbar.consumeClick()) {
+                // discard hotbar slot switches too
+            }
+        }
     }
 
     private static void tryApplyCamera(Minecraft mc) {

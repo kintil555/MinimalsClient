@@ -43,6 +43,8 @@ public class MinimalClientMod implements ClientModInitializer {
     private static KeyMapping hudEditorKey;
     /** Places a waypoint. Separate from the Waypoints module's own on/off keybind in the ClickGUI. */
     private static KeyMapping addWaypointKey;
+    /** Leaves spectate. Own keybind (default Q), so it never shares state with vanilla Drop Item. */
+    private static KeyMapping exitSpectateKey;
     public static boolean hudVisible = true;
     /** True while the Sprint module is the one holding the sprint key down. */
     private static boolean sprintHeldByModule;
@@ -79,6 +81,14 @@ public class MinimalClientMod implements ClientModInitializer {
                 InputConstants.KEY_B,
                 CATEGORY
         ));
+
+        exitSpectateKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.minimals.exit_spectate",
+                InputConstants.Type.KEYSYM,
+                InputConstants.KEY_Q,
+                CATEGORY
+        ));
+        SpectateManager.setExitKey(exitSpectateKey);
 
         HudRegistry.register(new ArraylistElement());
         HudRegistry.register(new KeystrokeElement());
@@ -160,6 +170,7 @@ public class MinimalClientMod implements ClientModInitializer {
         }
         KeyMapping sprintKey = client.options.keySprint;
         boolean want = ModuleManager.isEnabled("Sprint")
+                && !SpectateManager.isSpectating()
                 && client.gui.screen() == null
                 && client.options.keyUp.isDown();
         if (want) {
