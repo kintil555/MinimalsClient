@@ -33,11 +33,15 @@ public class MenuChoiceScreen extends Screen {
     private static final float SPIN_DEG = 200f;
     private static final long OPEN_MS = 520L;
 
-    /** Colours (ARGB). Outline is always drawn, hover only brightens. */
-    private static final int FILL = 0x66101828;
-    private static final int FILL_HOVER = 0x992A2F55;
-    private static final int OUTLINE = 0xCCE8E8ED;
-    private static final int OUTLINE_HOVER = 0xFFFFFFFF;
+    /**
+     * Colours (ARGB), taken from the client theme: dark panel base (UiRenderer.PANEL_BG family)
+     * with the blue-violet accent (UiRenderer.ACCENT 0x8B5CF6 / replay label 0x3535CC).
+     * The outline is always drawn; hover only brightens fill + outline.
+     */
+    private static final int FILL = 0xB0141433;          // dark blue-black, like the panels
+    private static final int FILL_HOVER = 0xD02B2A6E;    // lifted toward the accent
+    private static final int OUTLINE = 0xFF6D5BD8;       // accent, a step darker than ACCENT
+    private static final int OUTLINE_HOVER = 0xFFA78BFA; // light accent
     private static final int RECORD_TINT_ACTIVE = 0xFFE23B3B;
 
     private enum Slot {
@@ -288,7 +292,7 @@ public class MenuChoiceScreen extends Screen {
         double rad = Math.toRadians(slot.centerDeg + spin);
         int ix = cx() + (int) Math.round(Math.sin(rad) * mid);
         int iy = cy() - (int) Math.round(Math.cos(rad) * mid);
-        int tint = hover ? 0xFFFFFFFF : UiRenderer.TEXT_PRIMARY;
+        int tint = hover ? 0xFFC4B5FD : UiRenderer.TEXT_PRIMARY;
 
         switch (slot) {
             case RECORD -> {
@@ -330,7 +334,7 @@ public class MenuChoiceScreen extends Screen {
         pose.pushMatrix();
         pose.translate(cx(), cy());
         pose.scale(1.5f, 1.5f);
-        UiRenderer.text(g, text, -tw / 2, -4, hovered == null ? UiRenderer.TEXT_SECONDARY : 0xFFFFFFFF);
+        UiRenderer.text(g, text, -tw / 2, -4, hovered == null ? UiRenderer.TEXT_SECONDARY : 0xFFC4B5FD);
         pose.popMatrix();
     }
 
