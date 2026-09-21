@@ -17,7 +17,10 @@ import net.minecraft.network.chat.Component;
  */
 public class SettingRowWidget extends Button {
 
+    private static final int KNOB_R = 4;
+
     private final Setting<?> setting;
+    private boolean dragging;
 
     public SettingRowWidget(int x, int y, int width, int height, Setting<?> setting) {
         super(x, y, width, height, Component.literal(setting.getName()), btn -> { }, DEFAULT_NARRATION);
@@ -36,18 +39,46 @@ public class SettingRowWidget extends Button {
         } else if (setting instanceof EnumSetting<?> enumSetting) {
             enumSetting.cycle();
         } else if (setting instanceof IntSetting intSetting) {
-            boolean rightHalf = event.x() >= getX() + getWidth() / 2.0;
-            intSetting.adjust(rightHalf ? 1 : -1);
+            // Only the track/knob area starts a drag, so clicking the label or scrolling
+            // past the row never changes the value by accident.
+            dragging = isOnTrack(event.x(), event.y());
+            if (dragging) {
+                dragTo(intSetting, event.x());
+            }
         }
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (setting instanceof IntSetting intSetting && isMouseOver(mouseX, mouseY) && scrollY != 0) {
-            intSetting.adjust(scrollY > 0 ? 1 : -1);
-            return true;
+    protected void onDrag(MouseButtonEvent event, double dragX, double dragY) {
+        if (dragging && setting instanceof IntSetting intSetting) {
+            dragTo(intSetting, event.x());
         }
-        return false;
+    }
+
+    @Override
+    public void onRelease(MouseButtonEvent event) {
+        dragging = false;
+    }
+
+    private int trackX1() {
+        return getX() + 10;
+    }
+
+    private int trackX2() {
+        return getX() + getWidth() - 10;
+    }
+
+    private int trackY() {
+        return getY() + getHeight() - 7;
+    }
+
+    private boolean isOnTrack(double mx, double my) {
+        return mx >= trackX1() - KNOB_R && mx <= trackX2() + KNOB_R
+                && my >= trackY() - KNOB_R - 3 && my <= trackY() + KNOB_R + 3;
+    }
+
+    private void dragTo(IntSetting intSetting, double mx) {
+        intSetting.setProgress((float) ((mx - trackX1()) / (double) (trackX2() - trackX1())));
     }
 
     @Override
@@ -67,12 +98,16 @@ public class SettingRowWidget extends Button {
         UiRenderer.text(graphics, value, valueX, textY, valueColor);
 
         if (setting instanceof IntSetting intSetting) {
-            int barX1 = getX() + 10;
-            int barX2 = getX() + w - 10;
-            int barY = getY() + h - 4;
-            UiRenderer.roundedRect(graphics, barX1, barY, barX2, barY + 2, 1, UiRenderer.TOGGLE_OFF);
-            int fill = barX1 + Math.max(2, Math.round((barX2 - barX1) * intSetting.getProgress()));
-            UiRenderer.roundedRect(graphics, barX1, barY, fill, barY + 2, 1, UiRenderer.ACCENT);
+            int barX1 = trackX1();
+            int barX2 = trackX2();
+            int barY = trackY();
+            UiRenderer.roundedRect(graphics, barX1, barY - 1, barX2, barY + 1, 1, UiRenderer.TOGGLE_OFF);
+            int knobX = barX1 + Math.round((barX2 - barX1) * intSetting.getProgress());
+            UiRenderer.roundedRect(graphics, barX1, barY - 1, Math.max(barX1 + 2, knobX), barY + 1, 1, UiRenderer.ACCENT);
+            boolean hot = dragging || (isHovered() && isOnTrack(mouseX, mouseY));
+            int r = hot ? KNOB_R + 1 : KNOB_R;
+            UiRenderer.roundedRect(graphics, knobX - r, barY - r, knobX + r, barY + r, r,
+                    hot ? 0xFFFFFFFF : UiRenderer.TEXT_PRIMARY);
         }
     }
 }

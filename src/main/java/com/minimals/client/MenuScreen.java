@@ -7,6 +7,7 @@ import com.minimals.client.module.setting.StringSetting;
 import com.minimals.client.ui.Animation;
 import com.minimals.client.ui.CategoryTabWidget;
 import com.minimals.client.ui.SettingWidgets;
+import com.minimals.client.ui.SettingsPanelWidget;
 import com.minimals.client.ui.TextFieldRowWidget;
 import com.minimals.client.ui.GearButtonWidget;
 import com.minimals.client.ui.HeaderIconButtonWidget;
@@ -278,14 +279,18 @@ public class MenuScreen extends Screen {
             if (EXPANDED.contains(module)) {
                 int settingX = contentX + SETTING_INDENT;
                 int settingW = contentW - SETTING_INDENT;
+                int panelTop = y - ROW_GAP / 2;
+                SettingsPanelWidget backdrop = new SettingsPanelWidget(settingX - 4, panelTop, settingW + 4, 0);
+                track(backdrop);   // tracked first so it draws behind its rows
                 for (Setting<?> setting : module.getSettings()) {
-                    track(SettingWidgets.create(settingX, y, settingW, SETTING_ROW_H, setting));
+                    track(SettingWidgets.create(settingX + 4, y, settingW - 4, SETTING_ROW_H, setting));
                     y += SettingWidgets.heightOf(setting, SETTING_ROW_H) + ROW_GAP;
                 }
-                KeybindRowWidget keybind = new KeybindRowWidget(settingX, y, settingW, SETTING_ROW_H, module);
+                KeybindRowWidget keybind = new KeybindRowWidget(settingX + 4, y, settingW - 4, SETTING_ROW_H, module);
                 keybindRows.add(keybind);
                 track(keybind);
                 y += SETTING_ROW_H + ROW_GAP;
+                backdrop.setHeight(y - panelTop - ROW_GAP / 2);
             }
         }
 
@@ -390,7 +395,7 @@ public class MenuScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        // A setting slider under the cursor gets the wheel first; otherwise scroll the list.
+        // The wheel only scrolls the list; sliders are drag-only so scrolling never edits them.
         if (super.mouseScrolled(mouseX, mouseY, scrollX, scrollY)) {
             return true;
         }

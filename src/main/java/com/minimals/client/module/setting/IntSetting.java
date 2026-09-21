@@ -36,6 +36,14 @@ public class IntSetting extends Setting<Integer> {
     /**
      * Fraction of the range currently filled, 0..1. Used for the slider-style bar.
      */
+    public void setProgress(float progress) {
+        float t = Math.max(0f, Math.min(1f, progress));
+        int raw = min + Math.round(t * (max - min));
+        // snap to the step grid anchored at min so dragging lands on valid values
+        int snapped = min + Math.round((raw - min) / (float) step) * step;
+        set(snapped);
+    }
+
     public float getProgress() {
         return max == min ? 0f : (float) (get() - min) / (float) (max - min);
     }
