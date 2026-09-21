@@ -32,7 +32,7 @@ public final class PostFxRenderer {
                 // Left the replay: free cached GPU chains and stop any armed block pick.
                 wasActive = false;
                 reset();
-                BlockPickMode.disarm();
+                BlockPickMode.reset();
             }
             PostFxState.clear();
             return;

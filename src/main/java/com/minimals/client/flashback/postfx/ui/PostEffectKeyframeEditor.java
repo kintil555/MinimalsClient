@@ -153,25 +153,18 @@ public final class PostEffectKeyframeEditor {
     private static void renderBlockList(PostEffectKeyframe keyframe, Consumer<Consumer<Keyframe>> update) {
         ImGui.text("Blocks (" + keyframe.blocks.size() + ")");
 
-        // Picks are queued by BlockPickMode (input phase) and applied here, inside the sidebar's own
-        // render, where `update` is valid.
-        if (BlockPickMode.isArmedFor(keyframe)) {
-            for (PostFxBlock picked : BlockPickMode.takePending()) {
-                update.accept(k -> addBlock((PostEffectKeyframe) k, picked));
-            }
+        // Eyedropper: drag the icon onto a block in the viewport; the block under it is highlighted
+        // yellow and added on release. Picks are queued by BlockPickMode and applied here, inside
+        // the sidebar's own render, where `update` is valid.
+        for (PostFxBlock picked : BlockPickMode.takePending()) {
+            update.accept(k -> addBlock((PostEffectKeyframe) k, picked));
         }
-
-        if (BlockPickMode.isArmedFor(keyframe)) {
-            ImGui.textColored(0xFF80FF80, "Hold Ctrl+H and left click a block");
+        BlockPickMode.renderEyedropper();
+        ImGui.sameLine();
+        if (BlockPickMode.isDragging()) {
+            ImGui.textColored(1.0f, 0.9f, 0.0f, 1.0f, "Release on a block to add it");
         } else {
-            ImGui.textDisabled("Ctrl+H + left click a block to add it");
-        }
-        if (ImGui.button(BlockPickMode.isArmedFor(keyframe) ? "Stop picking" : "Pick blocks")) {
-            if (BlockPickMode.isArmedFor(keyframe)) {
-                BlockPickMode.disarm();
-            } else {
-                BlockPickMode.arm(keyframe, update);
-            }
+            ImGui.textDisabled("Drag the eyedropper onto a block");
         }
 
         int removeIndex = -1;

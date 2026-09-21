@@ -5,10 +5,10 @@
   "compatibilityLevel": "JAVA_21",
   "plugin": "com.minimals.client.flashback.mixin.FlashbackMixinPlugin",
   "client": [
-    "PostEffectPickMixin",
     "PostEffectRenderMixin",
     "KeyframeGsonMixin",
-    "FlashbackGsonMixin"
+    "FlashbackGsonMixin",
+    "BlockPickHighlightMixin"
   ],
   "injectors": {
     "defaultRequire": 1
