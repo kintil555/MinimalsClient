@@ -376,7 +376,18 @@ public class MenuScreen extends Screen {
             // rows like the colour wheel no longer vanish until fully scrolled into view.
             boolean inside = widget.getY() + widget.getHeight() > top && widget.getY() < bottom;
             widget.visible = inside;
-            widget.active = inside;
+            // SettingsPanelWidget (the backdrop behind an expanded module's rows) is permanently
+            // non-interactive: its constructor sets active = false so isMouseOver() never fires
+            // for it and it never intercepts a click meant for the rows drawn on top of it. This
+            // used to blindly overwrite that with `inside`, which is true almost the whole time
+            // the panel is on screen (it spans every row inside it) - so after the very first
+            // rebuild, the backdrop went active again, got picked first by getChildAt() (it was
+            // tracked before its rows) and its own mouseClicked() always returns false, which
+            // stops the click there and makes every setting/keybind row in every module
+            // unclickable. Keep it permanently inactive instead of re-deriving it here.
+            if (!(widget instanceof SettingsPanelWidget)) {
+                widget.active = inside;
+            }
         }
     }
 
