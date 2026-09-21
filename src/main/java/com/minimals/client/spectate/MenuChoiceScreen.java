@@ -2,7 +2,7 @@ package com.minimals.client.spectate;
 
 import com.minimals.client.MenuScreen;
 import com.minimals.client.MinimalClientMod;
-import com.minimals.client.replay.ReplayRecorder;
+import com.minimals.client.flashback.FlashbackBridge;
 import com.minimals.client.ui.Animation;
 import com.minimals.client.ui.UiRenderer;
 import net.minecraft.client.Minecraft;
@@ -113,10 +113,10 @@ public class MenuChoiceScreen extends Screen {
             case MENU -> mc.gui.setScreen(MenuScreen.create());
             case SPECTATE -> mc.gui.setScreen(new SpectateScreen());
             case RECORD -> {
-                if (ReplayRecorder.isRecording()) {
-                    ReplayRecorder.stop();
-                } else if (ReplayRecorder.canRecord()) {
-                    ReplayRecorder.start();
+                if (FlashbackBridge.isRecording()) {
+                    FlashbackBridge.finishRecording();
+                } else if (FlashbackBridge.canRecord()) {
+                    FlashbackBridge.startRecording();
                 }
             }
         }
@@ -311,8 +311,8 @@ public class MenuChoiceScreen extends Screen {
 
         switch (slot) {
             case RECORD -> {
-                boolean rec = ReplayRecorder.isRecording();
-                boolean usable = rec || ReplayRecorder.canRecord();
+                boolean rec = FlashbackBridge.isRecording();
+                boolean usable = rec || FlashbackBridge.canRecord();
                 int c = !usable ? UiRenderer.TEXT_SECONDARY : rec ? RECORD_TINT_ACTIVE : tint;
                 g.blit(RenderPipelines.GUI_TEXTURED, rec ? ICON_RECORDING : ICON_RECORD,
                         ix - 8, iy - 14, 0f, 0f, 16, 16, 16, 16, UiRenderer.withOpacity(c));
@@ -335,7 +335,7 @@ public class MenuChoiceScreen extends Screen {
             }
         }
         // label under the icon, small
-        String label = slot == Slot.RECORD && ReplayRecorder.isRecording() ? "Stop" : slot.label;
+        String label = slot == Slot.RECORD && FlashbackBridge.isRecording() ? "Stop" : slot.label;
         int tw = UiRenderer.textWidth(label);
         UiRenderer.text(g, label, ix - tw / 2, iy + 6, tint);
     }
@@ -343,7 +343,7 @@ public class MenuChoiceScreen extends Screen {
     /** Centre text: hovered segment name, or the idle title. Larger than normal text. */
     private void drawCenterText(GuiGraphicsExtractor g) {
         String text = hovered == null ? IDLE_TITLE
-                : hovered == Slot.RECORD && ReplayRecorder.isRecording() ? "Stop Recording" : hovered.label;
+                : hovered == Slot.RECORD && FlashbackBridge.isRecording() ? "Stop Recording" : hovered.label;
         int tw = UiRenderer.textWidth(text);
         var pose = g.pose();
         pose.pushMatrix();

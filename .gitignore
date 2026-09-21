@@ -1,0 +1,3 @@
+
+# Local-only third-party jars (Flashback ImGui binding). Never commit: licence forbids redistribution.
+libs/*.jar

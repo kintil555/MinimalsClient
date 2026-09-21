@@ -12,6 +12,12 @@ base {
 repositories {
     mavenCentral()
     maven { url 'https://maven.fabricmc.net/' }
+    exclusiveContent {
+        forRepository {
+            maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' }
+        }
+        filter { includeGroup 'maven.modrinth' }
+    }
 }
 
 dependencies {
@@ -23,6 +29,16 @@ dependencies {
     // so we only need it on the compile classpath here, not packaged into the jar.
     compileOnly 'io.github.llamalad7:mixinextras-fabric:0.5.4'
     annotationProcessor 'io.github.llamalad7:mixinextras-fabric:0.5.4'
+
+    // Flashback (the replay mod this client extends). compileOnly: it is a runtime dependency the
+    // player installs themselves, never bundled here (its licence forbids redistribution).
+    // Modrinth Maven: maven.modrinth:<project id or slug>:<version number>.
+    compileOnly "maven.modrinth:flashback:${project.flashback_version}"
+
+    // Flashback's ImGui binding (package imgui.moulberry90), used by the keyframe editor panels.
+    // Not published anywhere: copy imgui-binding-1.90.0.jar out of your installed Flashback jar
+    // (META-INF/jars/) into libs/. libs/ is gitignored, so it is never committed.
+    compileOnly files('libs/imgui-binding-1.90.0.jar')
 }
 
 java {

@@ -2,11 +2,6 @@ package com.minimals.client;
 
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
-import com.minimals.client.replay.ReplayFlyCamera;
-import com.minimals.client.replay.ReplayHud;
-import com.minimals.client.replay.ReplayPlayer;
-import com.minimals.client.replay.ReplayRecorder;
-import com.minimals.client.replay.TimelineScreen;
 import com.minimals.client.spectate.MenuChoiceScreen;
 import com.minimals.client.spectate.SpectateManager;
 import com.minimals.client.ui.hud.ArraylistElement;
@@ -51,8 +46,6 @@ public class MinimalClientMod implements ClientModInitializer {
     private static KeyMapping addWaypointKey;
     /** Leaves spectate. Own keybind (default Q), so it never shares state with vanilla Drop Item. */
     private static KeyMapping exitSpectateKey;
-    /** Opens the replay timeline bar while a replay is playing. */
-    private static KeyMapping replayTimelineKey;
     public static boolean hudVisible = true;
     /** True while the Sprint module is the one holding the sprint key down. */
     private static boolean sprintHeldByModule;
@@ -98,17 +91,13 @@ public class MinimalClientMod implements ClientModInitializer {
         ));
         SpectateManager.setExitKey(exitSpectateKey);
 
-        replayTimelineKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
-                "key.minimals.replay_timeline",
-                InputConstants.Type.KEYSYM,
-                InputConstants.KEY_R,
-                CATEGORY
-        ));
-
         HudRegistry.register(new ArraylistElement());
         HudRegistry.register(new KeystrokeElement());
         HudRegistry.register(new WailaElement());
         HudRegistry.register(new SpearMomentumElement());
+
+        // Adds our timeline elements (Post Effect) to Flashback; no-op when Flashback is not installed.
+        com.minimals.client.flashback.FlashbackBridge.bootstrap();
 
         // Restore the last session's settings (no-op on first run: default.txt does not exist yet).
         ConfigManager.load(ConfigManager.DEFAULT_NAME);
@@ -126,10 +115,6 @@ public class MinimalClientMod implements ClientModInitializer {
             // Runs first so the early returns below can never leave the key stuck down.
             tickAutoSprint(client);
             SpectateManager.tick(client);
-            ReplayRecorder.tick();
-            ReplayPlayer.tick();
-            ReplayFlyCamera.tick(client);
-            ReplayPlayer.reopenEditorIfNeeded(client);
 
             if (MenuScreen.isTypingInMenu()) {
                 // Drain queued presses so they don't fire the moment the text field loses focus.
@@ -148,11 +133,6 @@ public class MinimalClientMod implements ClientModInitializer {
             }
             while (hudToggleKey.consumeClick()) {
                 hudVisible = !hudVisible;
-            }
-            while (replayTimelineKey.consumeClick()) {
-                if (ReplayPlayer.isInWorld() && client.gui.screen() == null) {
-                    client.gui.setScreen(new TimelineScreen());
-                }
             }
             while (hudEditorKey.consumeClick()) {
                 if (client.gui.screen() == null) {
@@ -260,13 +240,6 @@ public class MinimalClientMod implements ClientModInitializer {
 
     private static void renderHud(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker) {
         renderSpectateHint(graphics);
-        if (Minecraft.getInstance().gui.screen() == null) {
-            // Flying the replay camera: the editor screen is closed, keep the black bars and panel
-            // backdrop so the world stays inside its viewport.
-            com.minimals.client.replay.ReplayLetterbox.render(graphics);
-            com.minimals.client.replay.ReplayLetterbox.renderPanelsBackdrop(graphics, graphics.guiWidth(), graphics.guiHeight());
-        }
-        ReplayHud.render(graphics);
         if (!hudVisible) return;
         WaypointRenderer.render(graphics);
         // While the HUD editor is open it draws every element itself (smoothly, following the
