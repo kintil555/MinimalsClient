@@ -89,7 +89,8 @@ public class SettingRowWidget extends Button {
             UiRenderer.roundedRect(graphics, getX(), getY(), getX() + w, getY() + h, 5, UiRenderer.ROW_BG_HOVER);
         }
 
-        int textY = getY() + (h - 8) / 2;
+        boolean slider = setting instanceof IntSetting;
+        int textY = slider ? getY() + 4 : getY() + (h - 8) / 2;
         UiRenderer.text(graphics, setting.getName(), getX() + 10, textY, UiRenderer.TEXT_SECONDARY);
 
         String value = setting.getDisplayValue();
