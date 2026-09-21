@@ -38,6 +38,8 @@ public final class BlockPickMode {
 
     private static boolean dragging;
     private static @Nullable BlockPos hovered;
+    /** Frame counter value at the last renderEyedropper call; detects a sidebar that stopped rendering. */
+    private static long lastRenderFrame = -1;
     private static final List<PostFxBlock> PENDING = new ArrayList<>();
 
     private BlockPickMode() {
@@ -45,6 +47,18 @@ public final class BlockPickMode {
 
     public static boolean isDragging() {
         return dragging;
+    }
+
+    /**
+     * Called every frame from the world render (BlockPickHighlightMixin). If the sidebar did not
+     * draw the eyedropper for a while (popup closed, replay left), a stuck drag is cancelled so the
+     * yellow box and queued picks cannot linger.
+     */
+    public static void tickWatchdog() {
+        long now = Minecraft.getInstance().getFrameTimeNs();
+        if ((dragging || !PENDING.isEmpty()) && lastRenderFrame >= 0 && now - lastRenderFrame > 500_000_000L) {
+            reset();
+        }
     }
 
     /** Block currently under the dragged eyedropper, or null. Read by the world highlight. */
@@ -75,6 +89,7 @@ public final class BlockPickMode {
      * an explicit glyph list, so an eyedropper glyph would render as a blank box.
      */
     public static void renderEyedropper() {
+        lastRenderFrame = Minecraft.getInstance().getFrameTimeNs();
         float size = 26.0f;
         ImGui.invisibleButton("##minimals_eyedropper", size, size);
         boolean buttonHovered = ImGui.isItemHovered();
@@ -127,16 +142,43 @@ public final class BlockPickMode {
         drawEyedropperIcon(fg, mx, my, 9.0f, YELLOW_IMGUI);
     }
 
+    /**
+     * Raycast from the camera through the mouse position into the world.
+     *
+     * Deliberately NOT ReplayUI.getMouseLookVector(): that returns null unless ImGui reports the
+     * viewport window as hovered, and while the eyedropper button is held ImGui keeps the sidebar
+     * item active, so the viewport is never "hovered" and no block would ever be found. The
+     * projection matrix, view quaternion and frame rectangle are all public, so compute it here.
+     */
     private static @Nullable BlockPos raycastBlock() {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) {
+        if (mc.level == null || !ReplayUI.isActive()) {
             return null;
         }
-        Vec3 look = ReplayUI.getMouseLookVector();
+        if (ReplayUI.lastProjectionMatrix == null || ReplayUI.lastViewQuaternion == null) {
+            return null;
+        }
         Entity camera = mc.getCameraEntity();
-        if (look == null || camera == null) {
+        if (camera == null) {
             return null;
         }
+
+        float mouseX = ImGui.getMousePosX();
+        float mouseY = ImGui.getMousePosY();
+        float vpX = ImGui.getMainViewport().getPosX();
+        float vpY = ImGui.getMainViewport().getPosY();
+        float fx = (mouseX - vpX - ReplayUI.frameX) / ReplayUI.frameWidth;
+        float fy = (mouseY - vpY - ReplayUI.frameY) / ReplayUI.frameHeight;
+        if (fx < 0.0f || fx > 1.0f || fy < 0.0f || fy > 1.0f) {
+            return null; // cursor is over a Flashback panel, not the world view
+        }
+
+        Vec3 forwards = ReplayUI.getForwardsVectorRaw(fx * 2.0f - 1.0f, fy * 2.0f - 1.0f);
+        Vec3 look = ReplayUI.getMouseLookVectorFromForwards(forwards);
+        if (look == null) {
+            return null;
+        }
+
         Vec3 from = camera.getEyePosition();
         Vec3 to = from.add(look.scale(PICK_DISTANCE));
         BlockHitResult result = mc.level.clip(new ClipContext(from, to, ClipContext.Block.OUTLINE,

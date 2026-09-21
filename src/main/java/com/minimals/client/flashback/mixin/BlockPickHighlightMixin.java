@@ -24,6 +24,7 @@ public abstract class BlockPickHighlightMixin {
 
     @Inject(method = "extractGizmos", at = @At("HEAD"))
     private void minimals$highlightPickTarget(CallbackInfo ci) {
+        BlockPickMode.tickWatchdog();
         BlockPos pos = BlockPickMode.hovered();
         if (pos == null) {
             return;
