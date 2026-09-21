@@ -6,7 +6,7 @@ import net.minecraft.client.input.InputWithModifiers;
 import net.minecraft.network.chat.Component;
 
 /** Non-interactive one-line label row (status text in the settings page). */
-public class InfoRowWidget extends Button {
+public class InfoRowWidget extends Button implements com.minimals.client.sound.SilentHover {
 
     private final String text;
 

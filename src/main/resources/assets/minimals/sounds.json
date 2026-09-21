@@ -1,0 +1,8 @@
+{
+  "menu_open": {
+    "sounds": ["minimals:menu_open"]
+  },
+  "button_hover": {
+    "sounds": ["minimals:button_hover"]
+  }
+}

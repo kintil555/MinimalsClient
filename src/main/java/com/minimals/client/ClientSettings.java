@@ -81,6 +81,11 @@ public final class ClientSettings {
     /** Show your own nametag when the camera is in third person. */
     public static final BoolSetting SELF_NAMETAG = new BoolSetting("Third Person Nametag", true);
 
+    /** RSHIFT-menu-open and button-hover sounds. Clicks keep vanilla's own sound either way. */
+    public static final BoolSetting UI_SOUNDS = new BoolSetting("UI Sounds", true);
+    /** Loudness of those two sounds on top of the game's own Master / UI volume sliders. */
+    public static final IntSetting UI_SOUND_VOLUME = new IntSetting("UI Sound Volume", 100, 0, 100, 5, "%");
+
     public static final StringSetting NICKNAME = new StringSetting("Nickname", "", MAX_NICKNAME_LENGTH);
     public static final EnumSetting<NameStyle> NICKNAME_STYLE =
             new EnumSetting<>("Nickname Style", NameStyle.NORMAL, NameStyle.values());
@@ -89,7 +94,8 @@ public final class ClientSettings {
 
     /** Order shown in the settings page. */
     public static final List<Setting<?>> ALL = List.of(
-            ANIMATIONS, FONT, OPACITY, SMOOTH_GUI, ARRAYLIST, SELF_NAMETAG, ARRAYLIST_COLOR, NICKNAME, NICKNAME_STYLE, NICKNAME_COLOR);
+            ANIMATIONS, FONT, OPACITY, SMOOTH_GUI, ARRAYLIST, SELF_NAMETAG, UI_SOUNDS, UI_SOUND_VOLUME,
+            ARRAYLIST_COLOR, NICKNAME, NICKNAME_STYLE, NICKNAME_COLOR);
 
     private ClientSettings() {
     }

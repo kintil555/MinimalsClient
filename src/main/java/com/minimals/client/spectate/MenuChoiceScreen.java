@@ -81,11 +81,20 @@ public class MenuChoiceScreen extends Screen {
             new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS)
     };
     private Slot hovered;
+    /** Slot the cursor was over on the previous frame, to detect entering a new one. */
+    private Slot lastHovered;
     /** Util.getMillis() of the last click on the locked Record segment; 0 = never. */
     private long shakeStartedAt;
 
     public MenuChoiceScreen() {
         super(Component.literal(IDLE_TITLE));
+    }
+
+    @Override
+    public void added() {
+        super.added();
+        // added() runs once per opening; init() also runs on every window resize.
+        com.minimals.client.sound.MinimalsSounds.playMenuOpen();
     }
 
     @Override
@@ -192,6 +201,14 @@ public class MenuChoiceScreen extends Screen {
         float appear = Mth.clamp((p - 0.15f) / 0.85f, 0f, 1f);
 
         hovered = open.isFinished() || p > 0.6f ? slotAt(mouseX, mouseY, scale, spin) : null;
+        if (hovered != lastHovered) {
+            // Entering a usable segment: one hover tick. Leaving to nothing stays silent, and the
+            // locked Record segment stays silent too (it cannot be used).
+            if (hovered != null && !isLocked(hovered)) {
+                com.minimals.client.sound.MinimalsSounds.playHover();
+            }
+            lastHovered = hovered;
+        }
         for (Slot s : Slot.values()) {
             hoverAnim[s.ordinal()].setTarget(s == hovered && !isLocked(s) ? 1f : 0f);
         }
