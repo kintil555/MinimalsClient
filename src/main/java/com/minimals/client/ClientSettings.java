@@ -94,6 +94,12 @@ public final class ClientSettings {
             new EnumSetting<>("Font", GuiFont.DEFAULT, GuiFont.values());
     public static final IntSetting OPACITY = new IntSetting("Opacity", 100, 20, 100, 5, "%");
 
+    /**
+     * Anti-aliases the rounded corners of the whole GUI. Off = the old pixel-stepped corners
+     * (crisper, marginally cheaper); on = corner pixels get partial alpha for a smooth curve.
+     */
+    public static final BoolSetting SMOOTH_GUI = new BoolSetting("Smooth GUI", true);
+
     /** Active-modules list in the top-left corner. */
     public static final BoolSetting ARRAYLIST = new BoolSetting("Arraylist", true);
 
@@ -108,7 +114,7 @@ public final class ClientSettings {
 
     /** Order shown in the settings page. */
     public static final List<Setting<?>> ALL = List.of(
-            ANIMATIONS, FONT, OPACITY, ARRAYLIST, SELF_NAMETAG, NICKNAME, NICKNAME_STYLE, NICKNAME_COLOR);
+            ANIMATIONS, FONT, OPACITY, SMOOTH_GUI, ARRAYLIST, SELF_NAMETAG, NICKNAME, NICKNAME_STYLE, NICKNAME_COLOR);
 
     private ClientSettings() {
     }

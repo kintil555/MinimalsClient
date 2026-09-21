@@ -13,11 +13,86 @@ public final class UiRenderer {
     }
 
     /**
-     * Draws a rounded rectangle by filling the interior and quarter-circling
-     * the four corners pixel-by-pixel (smooth at UI scale, unlike coarse
-     * vertical-strip approximations).
+     * Draws a rounded rectangle. With the "Smooth GUI" option on (default) the corners are
+     * anti-aliased; with it off they use the old pixel-stepped quarter circle.
      */
     public static void roundedRect(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {
+        if (ClientSettings.SMOOTH_GUI.get()) {
+            roundedRectSmooth(graphics, x1, y1, x2, y2, radius, color);
+        } else {
+            roundedRectPixel(graphics, x1, y1, x2, y2, radius, color);
+        }
+    }
+
+    /**
+     * Anti-aliased rounded rectangle. The straight parts are plain fills; each r x r corner is
+     * rasterised per pixel with coverage = clamp(r - distance(pixel centre, corner centre) + 0.5),
+     * i.e. the signed-distance-field edge ramp, so curved edges get partial alpha instead of
+     * stair-steps. Fully covered runs in a corner row are merged into a single fill, so only
+     * the ~1px edge band costs one fill per pixel. Coverage scales the colour's alpha, which
+     * composes correctly with the vanilla SrcAlpha blend for translucent colours too.
+     */
+    private static void roundedRectSmooth(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {
+        int r = Math.min(radius, Math.min((x2 - x1) / 2, (y2 - y1) / 2));
+        if (r <= 1) {
+            // too small for a visible curve; the pixel path is identical and cheaper
+            roundedRectPixel(graphics, x1, y1, x2, y2, radius, color);
+            return;
+        }
+        color = withOpacity(color);
+        int baseAlpha = ARGB.alpha(color);
+        if (baseAlpha == 0) {
+            return;
+        }
+
+        // center cross (avoids double-covering corners)
+        graphics.fill(x1 + r, y1, x2 - r, y2, color);
+        graphics.fill(x1, y1 + r, x1 + r, y2 - r, color);
+        graphics.fill(x2 - r, y1 + r, x2, y2 - r, color);
+
+        float rf = r;
+        for (int dy = 0; dy < r; dy++) {
+            // distance of this pixel row's centre above the corner centre (row 0 = outermost)
+            float cy = rf - (dy + 0.5f);
+            // first column (from the outer edge) that is fully covered, and the partial columns before it
+            int solidFrom = r;
+            for (int dx = 0; dx < r; dx++) {
+                float cx = rf - (dx + 0.5f);
+                float cover = rf - (float) Math.sqrt(cx * cx + cy * cy) + 0.5f;
+                if (cover >= 1f) {
+                    solidFrom = dx;
+                    break;
+                }
+                if (cover > 0f) {
+                    int edge = ARGB.color(Math.round(baseAlpha * cover), color);
+                    fillPixelRow(graphics, x1, x2, y1, y2, r, dx, dy, edge);
+                }
+            }
+            if (solidFrom < r) {
+                int len = r - solidFrom;
+                // solid run of the row, mirrored into all four corners
+                graphics.fill(x1 + solidFrom, y1 + dy, x1 + solidFrom + len, y1 + dy + 1, color);
+                graphics.fill(x2 - solidFrom - len, y1 + dy, x2 - solidFrom, y1 + dy + 1, color);
+                graphics.fill(x1 + solidFrom, y2 - dy - 1, x1 + solidFrom + len, y2 - dy, color);
+                graphics.fill(x2 - solidFrom - len, y2 - dy - 1, x2 - solidFrom, y2 - dy, color);
+            }
+        }
+    }
+
+    /** One partially covered corner pixel (column dx, row dy from the outer edge), mirrored to all 4 corners. */
+    private static void fillPixelRow(GuiGraphicsExtractor graphics, int x1, int x2, int y1, int y2,
+                                     int r, int dx, int dy, int color) {
+        graphics.fill(x1 + dx, y1 + dy, x1 + dx + 1, y1 + dy + 1, color);
+        graphics.fill(x2 - dx - 1, y1 + dy, x2 - dx, y1 + dy + 1, color);
+        graphics.fill(x1 + dx, y2 - dy - 1, x1 + dx + 1, y2 - dy, color);
+        graphics.fill(x2 - dx - 1, y2 - dy - 1, x2 - dx, y2 - dy, color);
+    }
+
+    /**
+     * Original rounded rectangle: fills the interior and quarter-circles the four corners
+     * with whole-pixel steps (no anti-aliasing). Used when "Smooth GUI" is off.
+     */
+    private static void roundedRectPixel(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {
         color = withOpacity(color);
         int r = Math.min(radius, Math.min((x2 - x1) / 2, (y2 - y1) / 2));
 

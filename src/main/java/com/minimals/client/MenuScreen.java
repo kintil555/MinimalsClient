@@ -307,8 +307,8 @@ public class MenuScreen extends Screen {
     }
 
     /**
-     * Global settings page (opened with the gear): animations, font, opacity and the
-     * client-side nickname with its style and colour.
+     * Global settings page (opened with the gear): animations, font, opacity, smooth GUI
+     * (anti-aliased rounded corners) and the client-side nickname with its style and colour.
      */
     private void buildSettingsPage(int contentX, int y, int contentW) {
         for (Setting<?> setting : ClientSettings.ALL) {
