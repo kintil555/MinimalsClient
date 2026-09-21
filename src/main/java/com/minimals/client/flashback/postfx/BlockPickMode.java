@@ -30,19 +30,31 @@ public final class BlockPickMode {
     private static final float PICK_DISTANCE = 128.0f;
 
     private static @Nullable PostEffectKeyframe armedKeyframe;
-    private static @Nullable Consumer<Consumer<Keyframe>> armedUpdate;
+    private static final java.util.List<PostFxBlock> PENDING = new java.util.ArrayList<>();
 
     private BlockPickMode() {
     }
 
     public static void arm(PostEffectKeyframe keyframe, Consumer<Consumer<Keyframe>> update) {
         armedKeyframe = keyframe;
-        armedUpdate = update;
     }
 
     public static void disarm() {
         armedKeyframe = null;
-        armedUpdate = null;
+        PENDING.clear();
+    }
+
+    /**
+     * Blocks picked since the last call. Call only from the sidebar render (where the update
+     * function is valid) and feed each one to that update function.
+     */
+    public static java.util.List<PostFxBlock> takePending() {
+        if (PENDING.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        java.util.List<PostFxBlock> out = new java.util.ArrayList<>(PENDING);
+        PENDING.clear();
+        return out;
     }
 
     public static boolean isArmedFor(PostEffectKeyframe keyframe) {
@@ -64,15 +76,18 @@ public final class BlockPickMode {
      * @return true when the click was a pick and must not reach Flashback
      */
     public static boolean tryPickOnLeftClick() {
-        if (armedKeyframe == null || armedUpdate == null || !chordHeld()) {
+        if (armedKeyframe == null || !chordHeld()) {
             return false;
         }
         BlockPos hit = raycastBlock();
         if (hit == null) {
             return true; // chord held over empty sky: still swallow the click, no camera grab
         }
-        PostFxBlock block = PostFxBlock.of(hit, PostFxBlock.DEFAULT_RADIUS);
-        armedUpdate.accept(k -> PostEffectKeyframeEditor.addBlock((PostEffectKeyframe) k, block));
+        // Do NOT call the update function here. It belongs to the sidebar/popup and takes Flashback's
+        // scene lock from the timeline window's render context, which does not exist inside
+        // ReplayUI.handleBasicInputs (that crashed with IllegalMonitorStateException). Queue the
+        // pick; the sidebar drains it via takePending() from inside its own render.
+        PENDING.add(PostFxBlock.of(hit, PostFxBlock.DEFAULT_RADIUS));
         return true;
     }
 

@@ -153,6 +153,14 @@ public final class PostEffectKeyframeEditor {
     private static void renderBlockList(PostEffectKeyframe keyframe, Consumer<Consumer<Keyframe>> update) {
         ImGui.text("Blocks (" + keyframe.blocks.size() + ")");
 
+        // Picks are queued by BlockPickMode (input phase) and applied here, inside the sidebar's own
+        // render, where `update` is valid.
+        if (BlockPickMode.isArmedFor(keyframe)) {
+            for (PostFxBlock picked : BlockPickMode.takePending()) {
+                update.accept(k -> addBlock((PostEffectKeyframe) k, picked));
+            }
+        }
+
         if (BlockPickMode.isArmedFor(keyframe)) {
             ImGui.textColored(0xFF80FF80, "Hold Ctrl+H and left click a block");
         } else {
