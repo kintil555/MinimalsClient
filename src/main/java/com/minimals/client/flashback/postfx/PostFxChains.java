@@ -35,10 +35,11 @@ final class PostFxChains {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("minimals/postfx");
 
-    static final int[] BLUR_STEPS = {2, 4, 8, 16, 32};
-    static final int[] PIXEL_STEPS = {2, 4, 8, 16, 32};
-    static final float[] INVERT_STEPS = {0.25f, 0.5f, 0.75f, 1.0f};
-    private static final int MAX_DYNAMIC = 32;
+    /** Fine quantisation for the continuous (keyframed) chains: small enough to look smooth. */
+    static final float BLUR_QUANT = 0.5f;
+    static final float PIXEL_QUANT = 1.0f;
+    static final float INTENSITY_QUANT = 0.02f;
+    private static final int MAX_DYNAMIC = 96;
 
     private static final Identifier SCREENQUAD = Identifier.parse("minecraft:core/screenquad");
     private static final Identifier MAIN = Identifier.parse("minecraft:main");
@@ -51,7 +52,7 @@ final class PostFxChains {
     private static ProjectionMatrixBuffer projectionBuffer;
 
     private static long lastBuildFrame = -1;
-    private static PostChain lastBlockChain;
+    private static PostChain lastDynamicChain;
 
     private static final Map<String, PostChain> DYNAMIC = new LinkedHashMap<>(16, 0.75f, true) {
         @Override
@@ -67,16 +68,7 @@ final class PostFxChains {
     private PostFxChains() {
     }
 
-    // ---------------------------------------------------------------- SCREEN (static presets)
-
-    static Identifier presetId(PostFxKind kind, float intensity, float pixelSize, float blurRadius) {
-        return switch (kind) {
-            case BLUR -> Identifier.parse("minimals:blur_" + (nearest(BLUR_STEPS, blurRadius) + 1));
-            case PIXELATE -> Identifier.parse("minimals:pixelate_" + (nearest(PIXEL_STEPS, pixelSize) + 1));
-            case INVERT -> Identifier.parse("minimals:invert_" + (nearestF(INVERT_STEPS, intensity) + 1));
-            case CUSTOM -> null;
-        };
-    }
+    // ---------------------------------------------------------------- CUSTOM (resource-pack chains)
 
     static PostChain staticChain(Identifier id) {
         if (id == null || FAILED.contains(id)) {
@@ -93,45 +85,53 @@ final class PostFxChains {
     // ---------------------------------------------------------------- BLOCKS (dynamic chains)
 
     /**
-     * @param circles up to 4 entries of {x, y, radius, strength} in pixels; the array is used to
-     *                build a cache key, so callers must quantise the values first
+     * Continuous chain used for BOTH scopes. The effect runs on the main target into FX, then
+     * mask_mix blends FX over the untouched copy: by {@code intensity} over the whole screen
+     * (circles == null) or by the projected circles. Every parameter is quantised finely so a
+     * keyframed blend from 0 to 1 walks through ~50 distinct chains instead of jumping.
+     *
+     * @param circles null for whole-screen; otherwise up to 4 {x, y, radius, strength} in pixels,
+     *                already quantised by the caller (they are part of the cache key)
      */
-    static PostChain blockChain(PostFxKind kind, float intensity, float pixelSize, float blurRadius,
-                                float[][] circles) {
-        String key = kind.serialName() + "|" + nearest(BLUR_STEPS, blurRadius) + "|"
-                + nearest(PIXEL_STEPS, pixelSize) + "|" + nearestF(INVERT_STEPS, intensity) + "|"
-                + circleKey(circles);
+    static PostChain dynamicChain(PostFxKind kind, float intensity, float pixelSize, float blurRadius,
+                                  float[][] circles) {
+        float blur = quantise(Math.max(0.5f, blurRadius), BLUR_QUANT);
+        float pixel = quantise(Math.max(1f, pixelSize), PIXEL_QUANT);
+        float mix = Math.max(0f, Math.min(1f, quantise(intensity, INTENSITY_QUANT)));
+        String key = kind.serialName() + "|" + Math.round(blur * 100) + "|" + Math.round(pixel * 100) + "|"
+                + Math.round(mix * 100) + "|"
+                + (circles == null ? "screen" : circleKey(circles));
         PostChain cached = DYNAMIC.get(key);
         if (cached != null) {
-            lastBlockChain = cached;
+            lastDynamicChain = cached;
             return cached;
         }
         // PostChain.load compiles pipelines: build at most one per frame, reuse the last chain
-        // meanwhile so a fast camera move cannot stall the renderer.
+        // meanwhile so a fast camera move / scrub cannot stall the renderer.
         long frame = Minecraft.getInstance().getFrameTimeNs();
-        if (lastBuildFrame == frame && lastBlockChain != null) {
-            return lastBlockChain;
+        if (lastBuildFrame == frame && lastDynamicChain != null) {
+            return lastDynamicChain;
         }
         lastBuildFrame = frame;
         try {
-            PostChainConfig config = buildBlockConfig(kind, intensity, pixelSize, blurRadius, circles);
+            PostChainConfig config = buildConfig(kind, mix, pixel, blur, circles);
             if (projectionBuffer == null) {
                 projectionBuffer = new ProjectionMatrixBuffer("minimals_postfx");
             }
             PostChain chain = PostChain.load(config, Minecraft.getInstance().getTextureManager(),
-                    net.minecraft.client.renderer.LevelTargetBundle.MAIN_TARGETS, Identifier.parse("minimals:blocks"),
+                    net.minecraft.client.renderer.LevelTargetBundle.MAIN_TARGETS, Identifier.parse("minimals:dynamic"),
                     PROJECTION, projectionBuffer);
             DYNAMIC.put(key, chain);
-            lastBlockChain = chain;
+            lastDynamicChain = chain;
             return chain;
         } catch (Exception e) {
-            LOGGER.error("Failed to build block post chain", e);
+            LOGGER.error("Failed to build post chain", e);
             return null;
         }
     }
 
-    private static PostChainConfig buildBlockConfig(PostFxKind kind, float intensity, float pixelSize,
-                                                    float blurRadius, float[][] circles) {
+    private static PostChainConfig buildConfig(PostFxKind kind, float mix, float pixel, float blur,
+                                               float[][] circles) {
         List<PostChainConfig.Pass> passes = new ArrayList<>();
 
         // Vanilla never reads and writes the same target in one pass (always main -> swap -> main),
@@ -144,26 +144,26 @@ final class PostFxChains {
         switch (kind) {
             case BLUR -> {
                 Identifier swap = Identifier.parse("minimals:swap");
-                float r = BLUR_STEPS[nearest(BLUR_STEPS, blurRadius)];
-                passes.add(blurPass(MAIN, swap, 1f, 0f, r));
-                passes.add(blurPass(swap, FX, 0f, 1f, r));
+                passes.add(blurPass(MAIN, swap, 1f, 0f, blur));
+                passes.add(blurPass(swap, FX, 0f, 1f, blur));
             }
             case PIXELATE -> passes.add(simplePass("minimals:post/pixelate", MAIN, FX,
-                    "PixelateConfig", List.of(entry("PixelSize", "float",
-                            new UniformValue.FloatUniform(PIXEL_STEPS[nearest(PIXEL_STEPS, pixelSize)])))));
+                    "PixelateConfig", List.of(entry("PixelSize", "float", new UniformValue.FloatUniform(pixel)))));
+            // Full-strength invert; the mix pass supplies the intensity.
             case INVERT -> passes.add(simplePass("minecraft:post/invert", MAIN, FX,
-                    "InvertConfig", List.of(entry("InverseAmount", "float",
-                            new UniformValue.FloatUniform(INVERT_STEPS[nearestF(INVERT_STEPS, intensity)])))));
-            case CUSTOM -> throw new IllegalArgumentException("CUSTOM has no block mode");
+                    "InvertConfig", List.of(entry("InverseAmount", "float", new UniformValue.FloatUniform(1.0f)))));
+            case CUSTOM -> throw new IllegalArgumentException("CUSTOM has no dynamic chain");
         }
 
         // mask_mix: FX over the untouched copy, into MAIN.
         Map<String, List<UniformValue>> uniforms = new LinkedHashMap<>();
         List<UniformValue> mask = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
-            float[] c = i < circles.length ? circles[i] : new float[]{0, 0, 0, 0};
+            float[] c = circles != null && i < circles.length ? circles[i] : new float[]{0, 0, 0, 0};
             mask.add(new UniformValue.Vec4Uniform(new Vector4f(c[0], c[1], c[2], c[3])));
         }
+        // Global.x = strength, Global.y = 1 for whole-screen mode.
+        mask.add(new UniformValue.Vec4Uniform(new Vector4f(mix, circles == null ? 1f : 0f, 0f, 0f)));
         uniforms.put("MaskConfig", mask);
         passes.add(new PostChainConfig.Pass(SCREENQUAD, Identifier.parse("minimals:post/mask_mix"),
                 List.of(new PostChainConfig.TargetInput("In", FX, false, false),
@@ -213,29 +213,9 @@ final class PostFxChains {
         StringBuilder sb = new StringBuilder();
         for (float[] c : circles) {
             sb.append((int) c[0]).append(',').append((int) c[1]).append(',')
-                    .append((int) c[2]).append(',').append((int) (c[3] * 100)).append(';');
+                    .append((int) c[2]).append(',').append(Math.round(c[3] * 100)).append(';');
         }
         return sb.toString();
-    }
-
-    private static int nearest(int[] steps, float v) {
-        int best = 0;
-        for (int i = 1; i < steps.length; i++) {
-            if (Math.abs(steps[i] - v) < Math.abs(steps[best] - v)) {
-                best = i;
-            }
-        }
-        return best;
-    }
-
-    private static int nearestF(float[] steps, float v) {
-        int best = 0;
-        for (int i = 1; i < steps.length; i++) {
-            if (Math.abs(steps[i] - v) < Math.abs(steps[best] - v)) {
-                best = i;
-            }
-        }
-        return best;
     }
 
     /** Drop everything after a resource reload or when leaving the replay. */
@@ -245,7 +225,7 @@ final class PostFxChains {
         }
         DYNAMIC.clear();
         FAILED.clear();
-        lastBlockChain = null;
+        lastDynamicChain = null;
         lastBuildFrame = -1;
     }
 }

@@ -40,7 +40,8 @@ public final class PostFxRenderer {
         wasActive = true;
         List<KeyframeChangePostEffect> effects = PostFxState.beginFrame();
         for (KeyframeChangePostEffect fx : effects) {
-            if (fx.intensity() <= 0.0f && fx.kind() != PostFxKind.BLUR && fx.kind() != PostFxKind.PIXELATE) {
+            // Intensity 0 = the untouched frame (that is where a keyframed fade-in starts).
+            if (fx.intensity() <= 0.0f && fx.kind() != PostFxKind.CUSTOM) {
                 continue;
             }
             PostChain chain = fx.scope() == PostFxScope.BLOCKS ? blockChain(fx, main) : screenChain(fx);
@@ -62,7 +63,7 @@ public final class PostFxRenderer {
             }
             return chain;
         }
-        return PostFxChains.staticChain(PostFxChains.presetId(fx.kind(), fx.intensity(), fx.pixelSize(), fx.blurRadius()));
+        return PostFxChains.dynamicChain(fx.kind(), fx.intensity(), fx.pixelSize(), fx.blurRadius(), null);
     }
 
     private static PostChain blockChain(KeyframeChangePostEffect fx, RenderTarget main) {
@@ -80,7 +81,7 @@ public final class PostFxRenderer {
                     PostFxChains.quantise(p[0], 8f),
                     PostFxChains.quantise(p[1], 8f),
                     Math.max(4f, PostFxChains.quantise(p[2], 4f)),
-                    Math.round(Math.max(0f, Math.min(1f, fx.intensity())) * 10f) / 10f});
+                    Math.max(0f, Math.min(1f, PostFxChains.quantise(fx.intensity(), PostFxChains.INTENSITY_QUANT)))});
         }
         if (circles.isEmpty()) {
             return null;
@@ -88,7 +89,7 @@ public final class PostFxRenderer {
         // Nearest blocks first (largest on-screen radius): only MAX_CIRCLES fit in the uniform.
         circles.sort((a, b) -> Float.compare(b[2], a[2]));
         float[][] arr = circles.subList(0, Math.min(MAX_CIRCLES, circles.size())).toArray(new float[0][]);
-        return PostFxChains.blockChain(fx.kind(), fx.intensity(), fx.pixelSize(), fx.blurRadius(), arr);
+        return PostFxChains.dynamicChain(fx.kind(), fx.intensity(), fx.pixelSize(), fx.blurRadius(), arr);
     }
 
     /** Call when a replay closes or resources reload. */

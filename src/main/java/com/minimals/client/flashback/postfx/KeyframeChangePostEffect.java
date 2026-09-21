@@ -27,9 +27,10 @@ public record KeyframeChangePostEffect(
     @Override
     public KeyframeChange interpolate(KeyframeChange to, double amount) {
         KeyframeChangePostEffect other = (KeyframeChangePostEffect) to;
-        // A different effect on the other side cannot be blended: hold this one until the switch.
+        // Keyframes with a different effect type / render mode cannot connect (the timeline shows
+        // them yellow with a warning). Never blend or switch mid-way: hold the left one.
         if (other.kind != this.kind || other.scope != this.scope || !other.customId.equals(this.customId)) {
-            return amount < 0.5 ? this : other;
+            return this;
         }
         return new KeyframeChangePostEffect(
                 this.kind,
@@ -47,7 +48,7 @@ public record KeyframeChangePostEffect(
     }
 
     /** Same block at the same index on both sides: blend its radius. Otherwise keep the left list. */
-    private static List<PostFxBlock> lerpBlocks(List<PostFxBlock> a, List<PostFxBlock> b, double t) {
+    static List<PostFxBlock> lerpBlocks(List<PostFxBlock> a, List<PostFxBlock> b, double t) {
         java.util.ArrayList<PostFxBlock> out = new java.util.ArrayList<>(a.size());
         for (int i = 0; i < a.size(); i++) {
             PostFxBlock l = a.get(i);
