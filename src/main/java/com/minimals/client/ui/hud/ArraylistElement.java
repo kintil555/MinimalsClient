@@ -68,7 +68,7 @@ public class ArraylistElement extends HudElement {
 
         int textY = y + PADDING;
         for (Module module : active) {
-            graphics.text(font, module.getName(), x + PADDING, textY, 0xFFFFFFFF, true);
+            graphics.text(font, module.getName(), x + PADDING, textY, ClientSettings.ARRAYLIST_COLOR.get(), true);
             textY += LINE_HEIGHT;
         }
     }

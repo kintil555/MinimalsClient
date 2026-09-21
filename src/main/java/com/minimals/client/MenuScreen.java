@@ -2,20 +2,18 @@ package com.minimals.client;
 
 import com.minimals.client.module.Module;
 import com.minimals.client.module.ModuleManager;
-import com.minimals.client.module.setting.ColorSetting;
 import com.minimals.client.module.setting.Setting;
 import com.minimals.client.module.setting.StringSetting;
 import com.minimals.client.ui.Animation;
 import com.minimals.client.ui.CategoryTabWidget;
-import com.minimals.client.ui.ColorWheelRowWidget;
+import com.minimals.client.ui.SettingWidgets;
+import com.minimals.client.ui.TextFieldRowWidget;
 import com.minimals.client.ui.GearButtonWidget;
 import com.minimals.client.ui.HeaderIconButtonWidget;
 import com.minimals.client.ui.InfoRowWidget;
 import com.minimals.client.ui.KeybindRowWidget;
 import com.minimals.client.ui.ModuleRowWidget;
 import com.minimals.client.ui.SearchFieldWidget;
-import com.minimals.client.ui.SettingRowWidget;
-import com.minimals.client.ui.TextFieldRowWidget;
 import com.minimals.client.ui.UiRenderer;
 import com.minimals.client.ui.hud.HudEditorScreen;
 import com.minimals.client.waypoint.WaypointListScreen;
@@ -280,13 +278,8 @@ public class MenuScreen extends Screen {
                 int settingX = contentX + SETTING_INDENT;
                 int settingW = contentW - SETTING_INDENT;
                 for (Setting<?> setting : module.getSettings()) {
-                    if (setting instanceof ColorSetting colorSetting) {
-                        track(new ColorWheelRowWidget(settingX, y, settingW, colorSetting));
-                        y += ColorWheelRowWidget.HEIGHT + ROW_GAP;
-                    } else {
-                        track(new SettingRowWidget(settingX, y, settingW, SETTING_ROW_H, setting));
-                        y += SETTING_ROW_H + ROW_GAP;
-                    }
+                    track(SettingWidgets.create(settingX, y, settingW, SETTING_ROW_H, setting));
+                    y += SettingWidgets.heightOf(setting, SETTING_ROW_H) + ROW_GAP;
                 }
                 KeybindRowWidget keybind = new KeybindRowWidget(settingX, y, settingW, SETTING_ROW_H, module);
                 keybindRows.add(keybind);
@@ -312,12 +305,8 @@ public class MenuScreen extends Screen {
      */
     private void buildSettingsPage(int contentX, int y, int contentW) {
         for (Setting<?> setting : ClientSettings.ALL) {
-            if (setting instanceof StringSetting text) {
-                track(new TextFieldRowWidget(contentX, y, contentW, SETTING_ROW_H, text));
-            } else {
-                track(new SettingRowWidget(contentX, y, contentW, SETTING_ROW_H, setting));
-            }
-            y += SETTING_ROW_H + ROW_GAP;
+            track(SettingWidgets.create(contentX, y, contentW, SETTING_ROW_H, setting));
+            y += SettingWidgets.heightOf(setting, SETTING_ROW_H) + ROW_GAP;
         }
         // Config: named files in <config dir>/minimals/, one file per config so it can be shared.
         track(new TextFieldRowWidget(contentX, y, contentW, SETTING_ROW_H, CONFIG_NAME, "default"));

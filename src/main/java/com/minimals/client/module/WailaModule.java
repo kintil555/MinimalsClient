@@ -1,6 +1,7 @@
 package com.minimals.client.module;
 
 import com.minimals.client.module.setting.BoolSetting;
+import com.minimals.client.module.setting.ColorSetting;
 import com.minimals.client.module.setting.IntSetting;
 
 /**
@@ -18,6 +19,9 @@ public class WailaModule extends Module {
     public final BoolSetting showModName = addSetting(new BoolSetting("Show Mod Name", true));
     public final BoolSetting showBlockDetails = addSetting(new BoolSetting("Show Block Details", true));
     public final IntSetting maxEffects = addSetting(new IntSetting("Max Effects", 4, 1, 8, 1, ""));
+
+    public final ColorSetting titleColor = addSetting(new ColorSetting("Title Color", 0xFFFFFF));
+    public final ColorSetting infoColor = addSetting(new ColorSetting("Info Color", 0xAAAAAA));
 
     public WailaModule() {
         super("WAILA", Category.VISUALS);

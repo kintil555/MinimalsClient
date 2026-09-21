@@ -80,8 +80,6 @@ public class WailaElement extends HudElement {
     private static final int ICON_SIZE = 16;
     private static final int ICON_GAP = 5;
 
-    private static final int COLOR_TITLE = 0xFFFFFFFF;
-    private static final int COLOR_INFO = 0xFFAAAAAA;
     private static final int COLOR_MOD = 0xFF5555FF;
     private static final int COLOR_HARMFUL = 0xFFFF5555;
     private static final int COLOR_BENEFICIAL = 0xFF55FF55;
@@ -176,6 +174,14 @@ public class WailaElement extends HudElement {
         super("waila", "WAILA", 0.5f, 0.02f);
     }
 
+    private static int titleColor() {
+        return module().titleColor.get();
+    }
+
+    private static int infoColor() {
+        return module().infoColor.get();
+    }
+
     private static WailaModule module() {
         return ModuleManager.waila();
     }
@@ -264,9 +270,9 @@ public class WailaElement extends HudElement {
 
     /** Sample shown in the HUD editor (mirrors the reference screenshot: name, hearts, career, mod). */
     private static final List<Line> SAMPLE_LINES = List.of(
-            new TextLine(Component.literal("Villager").withStyle(ChatFormatting.WHITE), COLOR_TITLE),
+            new TextLine(Component.literal("Villager"), titleColor()),
             new HealthLine(20f, 20f, 0f, HeartStyle.NORMAL),
-            new TextLine(Component.literal("Career: Shepherd"), COLOR_INFO),
+            new TextLine(Component.literal("Career: Shepherd"), infoColor()),
             new TextLine(Component.literal("Minecraft").withStyle(ChatFormatting.BLUE, ChatFormatting.ITALIC), COLOR_MOD));
 
     /** Measured sample, so the editor's drag box matches exactly what drawPlaceholder draws. */
@@ -296,7 +302,7 @@ public class WailaElement extends HudElement {
 
     private static void drawHealth(GuiGraphicsExtractor graphics, Font font, HealthLine line, int x, int y) {
         if (line.asText()) {
-            graphics.text(font, line.textValue(), x, y, COLOR_INFO);
+            graphics.text(font, line.textValue(), x, y, infoColor());
             return;
         }
 
@@ -389,17 +395,17 @@ public class WailaElement extends HudElement {
         WailaModule module = module();
         Font font = mc.font;
         List<Line> lines = new ArrayList<>();
-        lines.add(new TextLine(state.getBlock().getName().copy().withStyle(ChatFormatting.WHITE), COLOR_TITLE));
+        lines.add(new TextLine(state.getBlock().getName().copy(), titleColor()));
 
         if (module.showBlockDetails.get()) {
             float hardness = state.getDestroySpeed(level, pos);
             if (hardness < 0f) {
-                lines.add(new TextLine(Component.literal("Unbreakable"), COLOR_INFO));
+                lines.add(new TextLine(Component.literal("Unbreakable"), infoColor()));
             } else {
-                lines.add(new TextLine(Component.literal("Hardness: " + formatHealth(hardness)), COLOR_INFO));
+                lines.add(new TextLine(Component.literal("Hardness: " + formatHealth(hardness)), infoColor()));
             }
             if (state.requiresCorrectToolForDrops()) {
-                lines.add(new TextLine(Component.literal("Requires correct tool"), COLOR_INFO));
+                lines.add(new TextLine(Component.literal("Requires correct tool"), infoColor()));
             }
         }
 
@@ -424,12 +430,12 @@ public class WailaElement extends HudElement {
         WailaModule module = module();
         Font font = mc.font;
         List<Line> lines = new ArrayList<>();
-        lines.add(new TextLine(entityTitle(entity).copy().withStyle(ChatFormatting.WHITE), COLOR_TITLE));
+        lines.add(new TextLine(entityTitle(entity).copy(), titleColor()));
 
         if (entity instanceof Villager villager) {
             Component career = professionName(villager);
             if (career != null) {
-                lines.add(new TextLine(Component.literal("Career: ").append(career), COLOR_INFO));
+                lines.add(new TextLine(Component.literal("Career: ").append(career), infoColor()));
             }
         }
 
@@ -506,7 +512,7 @@ public class WailaElement extends HudElement {
         }
         int hidden = effects.size() - shown;
         if (hidden > 0) {
-            lines.add(new TextLine(Component.literal("+" + hidden + " more"), COLOR_INFO));
+            lines.add(new TextLine(Component.literal("+" + hidden + " more"), infoColor()));
         }
     }
 
