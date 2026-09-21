@@ -72,12 +72,30 @@ public class ColorWheelRowWidget extends Button {
         if (Math.hypot(dx, dy) <= wheelRadius() + CELL) {
             drag = Drag.WHEEL;
             pickWheel(mx, my);
-        } else if (mx >= stripX() && mx <= stripX() + STRIP_W) {
+        } else {
             drag = Drag.STRIP;
             pickStrip(my);
-        } else {
-            drag = Drag.NONE;
         }
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // The widget's bounding box also covers the label, hex value and swatch preview to its
+        // right, but only the wheel and the (10px-wide) brightness strip should pick a colour.
+        // Without this check, a click that lands anywhere else in the row still makes Minecraft
+        // treat this widget as focused+dragging (AbstractWidget.mouseClicked / the default
+        // ContainerEventHandler.mouseClicked both key off the bounding box), so the strip then
+        // reads as "stuck" the next time you actually try to drag it.
+        double mx = event.x();
+        double my = event.y();
+        double dx = mx - wheelCenterX();
+        double dy = my - wheelCenterY();
+        boolean onWheel = Math.hypot(dx, dy) <= wheelRadius() + CELL;
+        boolean onStrip = mx >= stripX() && mx <= stripX() + STRIP_W && my >= stripTop() && my <= stripBottom();
+        if (!onWheel && !onStrip) {
+            return false;
+        }
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override

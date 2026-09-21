@@ -39,13 +39,22 @@ public class SettingRowWidget extends Button {
         } else if (setting instanceof EnumSetting<?> enumSetting) {
             enumSetting.cycle();
         } else if (setting instanceof IntSetting intSetting) {
-            // Only the track/knob area starts a drag, so clicking the label or scrolling
-            // past the row never changes the value by accident.
-            dragging = isOnTrack(event.x(), event.y());
-            if (dragging) {
-                dragTo(intSetting, event.x());
-            }
+            dragTo(intSetting, event.x());
         }
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // AbstractWidget.mouseClicked fires onClick (and, via the screen, setFocused +
+        // setDragging(true)) for any click inside the widget's full bounding box. For a slider
+        // only the thin track/knob strip should actually start a drag: a click on the label or
+        // value text must neither move the slider nor grab drag-focus, or the *next* thing the
+        // user drags can silently stop responding (Minecraft still thinks this row is dragging).
+        if (setting instanceof IntSetting && !isOnTrack(event.x(), event.y())) {
+            return false;
+        }
+        dragging = setting instanceof IntSetting;
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
