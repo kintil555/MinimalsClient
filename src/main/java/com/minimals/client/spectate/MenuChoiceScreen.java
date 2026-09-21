@@ -34,14 +34,17 @@ public class MenuChoiceScreen extends Screen {
     private static final long OPEN_MS = 520L;
 
     /**
-     * Colours (ARGB), taken from the client theme: dark panel base (UiRenderer.PANEL_BG family)
-     * with the blue-violet accent (UiRenderer.ACCENT 0x8B5CF6 / replay label 0x3535CC).
-     * The outline is always drawn; hover only brightens fill + outline.
+     * Colours (ARGB). At rest the segments use the same dark neutral palette as the module menu
+     * (PANEL_BG / HEADER_BTN_BG family, no blue). The blue-violet accent only appears while the
+     * mouse is over a segment. The outline is always drawn.
      */
-    private static final int FILL = 0xB0141433;          // dark blue-black, like the panels
-    private static final int FILL_HOVER = 0xD02B2A6E;    // lifted toward the accent
-    private static final int OUTLINE = 0xFF6D5BD8;       // accent, a step darker than ACCENT
-    private static final int OUTLINE_HOVER = 0xFFA78BFA; // light accent
+    private static final int FILL = 0xF0141417;          // = UiRenderer.PANEL_BG
+    private static final int FILL_HOVER = 0xF01F1D3F;    // dark blue-violet, only on hover
+    private static final int OUTLINE = 0xFF2E2E38;       // = UiRenderer.HEADER_BTN_BG_HOVER (neutral grey)
+    private static final int OUTLINE_HOVER = 0xFF8B5CF6; // = UiRenderer.ACCENT
+    /** Extra scale a segment grows to while hovered (1.0 = none). */
+    private static final float HOVER_GROW = 0.06f;
+    private static final long HOVER_MS = 140L;
     private static final int RECORD_TINT_ACTIVE = 0xFFE23B3B;
 
     private enum Slot {
@@ -65,6 +68,10 @@ public class MenuChoiceScreen extends Screen {
             "textures/gui/recording.png");
 
     private final Animation open = new Animation(0f, OPEN_MS);
+    /** One 0..1 hover progress per slot (index = Slot.ordinal()), eased so growth and colour glide. */
+    private final Animation[] hoverAnim = {
+            new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS)
+    };
     private Slot hovered;
 
     public MenuChoiceScreen() {
@@ -133,12 +140,15 @@ public class MenuChoiceScreen extends Screen {
         double dx = mx - cx();
         double dy = my - cy();
         double dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < INNER_R * scale || dist > OUTER_R * scale) {
-            return null;
-        }
         // angle clockwise from up
         double ang = Math.toDegrees(Math.atan2(dx, -dy));
         for (Slot s : Slot.values()) {
+            // each slot's radii include its own hover growth, so the area you see is the area that
+            // reacts (no flicker on the edge of a segment that just grew under the mouse)
+            float grow = HOVER_GROW * hoverAnim[s.ordinal()].get();
+            if (dist < INNER_R * (scale - grow * 0.5f) || dist > OUTER_R * (scale + grow)) {
+                continue;
+            }
             if (inSegment(ang, s.centerDeg + spin)) {
                 return s;
             }
@@ -163,17 +173,20 @@ public class MenuChoiceScreen extends Screen {
         float appear = Mth.clamp((p - 0.15f) / 0.85f, 0f, 1f);
 
         hovered = open.isFinished() || p > 0.6f ? slotAt(mouseX, mouseY, scale, spin) : null;
+        for (Slot s : Slot.values()) {
+            hoverAnim[s.ordinal()].setTarget(s == hovered ? 1f : 0f);
+        }
 
         try {
             UiRenderer.setFade(appear);
             for (Slot s : Slot.values()) {
-                drawSegment(graphics, s, scale, spin, s == hovered);
+                drawSegment(graphics, s, scale, spin, hoverAnim[s.ordinal()].get());
             }
             // icons + centre text only once the ring has nearly settled, so they don't smear
             float detail = Mth.clamp((p - 0.55f) / 0.45f, 0f, 1f);
             UiRenderer.setFade(detail * appear);
             for (Slot s : Slot.values()) {
-                drawIcon(graphics, s, scale, spin, s == hovered);
+                drawIcon(graphics, s, scale, spin, hoverAnim[s.ordinal()].get());
             }
             drawCenterText(graphics);
         } finally {
@@ -187,12 +200,14 @@ public class MenuChoiceScreen extends Screen {
         super.removed();
     }
 
-    private void drawSegment(GuiGraphicsExtractor g, Slot slot, float scale, float spin, boolean hover) {
+    private void drawSegment(GuiGraphicsExtractor g, Slot slot, float scale, float spin, float hover) {
         float center = slot.centerDeg + spin;
-        int outer = Math.round(OUTER_R * scale);
-        int inner = Math.round(INNER_R * scale);
-        int fill = UiRenderer.withOpacity(hover ? FILL_HOVER : FILL);
-        int line = UiRenderer.withOpacity(hover ? OUTLINE_HOVER : OUTLINE);
+        // Hovered segment grows a little: the outer edge moves out, the inner edge moves in.
+        float grow = HOVER_GROW * hover;
+        int outer = Math.round(OUTER_R * (scale + grow));
+        int inner = Math.round(INNER_R * (scale - grow * 0.5f));
+        int fill = UiRenderer.withOpacity(lerpColor(FILL, FILL_HOVER, hover));
+        int line = UiRenderer.withOpacity(lerpColor(OUTLINE, OUTLINE_HOVER, hover));
         int t = 2;
         // Outline = the full sector in the line colour, then the sector shrunk by t px on top in the
         // fill colour. Radii shrink by t; the angular edges are pushed inwards by t px (as degrees).
@@ -287,12 +302,12 @@ public class MenuChoiceScreen extends Screen {
         }
     }
 
-    private void drawIcon(GuiGraphicsExtractor g, Slot slot, float scale, float spin, boolean hover) {
-        double mid = (INNER_R + OUTER_R) / 2.0 * scale;
+    private void drawIcon(GuiGraphicsExtractor g, Slot slot, float scale, float spin, float hover) {
+        double mid = (INNER_R + OUTER_R) / 2.0 * (scale + HOVER_GROW * hover * 0.25f);
         double rad = Math.toRadians(slot.centerDeg + spin);
         int ix = cx() + (int) Math.round(Math.sin(rad) * mid);
         int iy = cy() - (int) Math.round(Math.cos(rad) * mid);
-        int tint = hover ? 0xFFC4B5FD : UiRenderer.TEXT_PRIMARY;
+        int tint = lerpColor(UiRenderer.TEXT_PRIMARY, 0xFFC4B5FD, hover);
 
         switch (slot) {
             case RECORD -> {
@@ -339,6 +354,21 @@ public class MenuChoiceScreen extends Screen {
     }
 
     // ---- easing ------------------------------------------------------------------------
+
+    /** Per-channel ARGB blend, t = 0 -> a, t = 1 -> b. */
+    private static int lerpColor(int a, int b, float t) {
+        if (t <= 0f) {
+            return a;
+        }
+        if (t >= 1f) {
+            return b;
+        }
+        int al = Math.round(Mth.lerp(t, a >>> 24, b >>> 24));
+        int r = Math.round(Mth.lerp(t, (a >> 16) & 255, (b >> 16) & 255));
+        int gr = Math.round(Mth.lerp(t, (a >> 8) & 255, (b >> 8) & 255));
+        int bl = Math.round(Mth.lerp(t, a & 255, b & 255));
+        return (al << 24) | (r << 16) | (gr << 8) | bl;
+    }
 
     private static float easeOutCubic(float t) {
         float u = 1f - t;
