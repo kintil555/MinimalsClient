@@ -14,6 +14,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
+import net.minecraft.util.Util;
 
 /**
  * "RSHIFT Option": radial (circle) chooser shown when RShift is pressed. Three outlined
@@ -46,6 +47,11 @@ public class MenuChoiceScreen extends Screen {
     private static final float HOVER_GROW = 0.06f;
     private static final long HOVER_MS = 140L;
     private static final int RECORD_TINT_ACTIVE = 0xFFE23B3B;
+    /** Dark overlay over a locked segment: 60% opaque black. */
+    private static final int LOCK_OVERLAY = 0x99000000;
+    private static final float LOCK_ICON_SCALE = 2.5f;
+    private static final long SHAKE_MS = 380L;
+    private static final float SHAKE_AMPLITUDE = 4f;
 
     private enum Slot {
         // centre angle in degrees, 0 = up, clockwise
@@ -66,6 +72,8 @@ public class MenuChoiceScreen extends Screen {
             "textures/gui/record.png");
     private static final Identifier ICON_RECORDING = Identifier.fromNamespaceAndPath(MinimalClientMod.MOD_ID,
             "textures/gui/recording.png");
+    private static final Identifier ICON_LOCK = Identifier.fromNamespaceAndPath(MinimalClientMod.MOD_ID,
+            "textures/gui/gembok.png");
 
     private final Animation open = new Animation(0f, OPEN_MS);
     /** One 0..1 hover progress per slot (index = Slot.ordinal()), eased so growth and colour glide. */
@@ -73,6 +81,8 @@ public class MenuChoiceScreen extends Screen {
             new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS)
     };
     private Slot hovered;
+    /** Util.getMillis() of the last click on the locked Record segment; 0 = never. */
+    private long shakeStartedAt;
 
     public MenuChoiceScreen() {
         super(Component.literal(IDLE_TITLE));
@@ -107,7 +117,16 @@ public class MenuChoiceScreen extends Screen {
         return super.keyPressed(event);
     }
 
+    /** A segment is locked when it cannot be used at all: Record without a compatible Flashback. */
+    private static boolean isLocked(Slot slot) {
+        return slot == Slot.RECORD && !FlashbackBridge.isLoaded();
+    }
+
     private void activate(Slot slot) {
+        if (isLocked(slot)) {
+            shakeStartedAt = Util.getMillis();
+            return;
+        }
         Minecraft mc = Minecraft.getInstance();
         switch (slot) {
             case MENU -> mc.gui.setScreen(MenuScreen.create());
@@ -174,7 +193,7 @@ public class MenuChoiceScreen extends Screen {
 
         hovered = open.isFinished() || p > 0.6f ? slotAt(mouseX, mouseY, scale, spin) : null;
         for (Slot s : Slot.values()) {
-            hoverAnim[s.ordinal()].setTarget(s == hovered ? 1f : 0f);
+            hoverAnim[s.ordinal()].setTarget(s == hovered && !isLocked(s) ? 1f : 0f);
         }
 
         try {
@@ -189,8 +208,72 @@ public class MenuChoiceScreen extends Screen {
                 drawIcon(graphics, s, scale, spin, hoverAnim[s.ordinal()].get());
             }
             drawCenterText(graphics);
+            if (isLocked(Slot.RECORD)) {
+                drawLock(graphics, scale, spin);
+            }
         } finally {
             UiRenderer.setFade(1f);
+        }
+        if (hovered == Slot.RECORD && isLocked(Slot.RECORD) && open.isFinished()) {
+            drawLockTooltip(graphics, mouseX, mouseY);
+        }
+    }
+
+    /**
+     * Dark 60% overlay over the Record segment (same shape as the segment, never grown), a big lock
+     * that shakes for a moment after a click, and a tooltip explaining why it is unavailable.
+     */
+    private void drawLock(GuiGraphicsExtractor g, float scale, float spin) {
+        Slot slot = Slot.RECORD;
+        float center = slot.centerDeg + spin;
+        int outer = Math.round(OUTER_R * scale);
+        int inner = Math.round(INNER_R * scale);
+        paintSector(g, center, inner, outer, halfDeg(0), net.minecraft.util.ARGB.multiplyAlpha(LOCK_OVERLAY, UiRenderer.getFade()));
+
+        double mid = (INNER_R + OUTER_R) / 2.0 * scale;
+        double rad = Math.toRadians(center);
+        float lx = cx() + (float) (Math.sin(rad) * mid);
+        float ly = cy() - (float) (Math.cos(rad) * mid);
+
+        float shake = 0f;
+        long elapsed = Util.getMillis() - shakeStartedAt;
+        if (shakeStartedAt != 0 && elapsed >= 0 && elapsed < SHAKE_MS) {
+            float decay = 1f - elapsed / (float) SHAKE_MS;
+            shake = (float) Math.sin(elapsed * 0.09) * SHAKE_AMPLITUDE * decay;
+        }
+
+        var pose = g.pose();
+        pose.pushMatrix();
+        pose.translate(lx + shake, ly);
+        pose.scale(LOCK_ICON_SCALE, LOCK_ICON_SCALE);
+        // the glyph occupies pixels 4..11 x 1..12 of the 16x16 texture: centre it on the segment
+        g.blit(RenderPipelines.GUI_TEXTURED, ICON_LOCK, -8, -7, 0f, 0f, 16, 16, 16, 16,
+                net.minecraft.util.ARGB.multiplyAlpha(0xFFFFFFFF, UiRenderer.getFade()));
+        pose.popMatrix();
+    }
+
+    /** Own tooltip (rounded dark box) so it matches the menu style; drawn last, above everything. */
+    private void drawLockTooltip(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        String reason = FlashbackBridge.unavailableReason();
+        if (reason == null) {
+            return;
+        }
+        String[] lines = reason.split("\n");
+        int w = 0;
+        for (String line : lines) {
+            w = Math.max(w, UiRenderer.textWidth(line));
+        }
+        int pad = 6;
+        int lineH = 11;
+        int boxW = w + pad * 2;
+        int boxH = lines.length * lineH + pad * 2 - 2;
+        int x = Math.min(mouseX + 12, this.width - boxW - 4);
+        int y = Math.min(mouseY + 12, this.height - boxH - 4);
+        // border first, then the fill 1px smaller on every side (roundedRectOutline just fills)
+        UiRenderer.roundedRect(g, x - 1, y - 1, x + boxW + 1, y + boxH + 1, 5, OUTLINE_HOVER);
+        UiRenderer.roundedRect(g, x, y, x + boxW, y + boxH, 4, 0xFF0E0E12);
+        for (int i = 0; i < lines.length; i++) {
+            UiRenderer.text(g, lines[i], x + pad, y + pad + i * lineH, i == 0 ? 0xFFFFC857 : UiRenderer.TEXT_PRIMARY);
         }
     }
 

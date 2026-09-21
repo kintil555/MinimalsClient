@@ -1,6 +1,8 @@
 package com.minimals.client.flashback;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.Version;
+import net.fabricmc.loader.api.VersionParsingException;
 
 /**
  * Single door into the Flashback mod. Flashback is an optional dependency: every other class in
@@ -13,14 +15,42 @@ import net.fabricmc.loader.api.FabricLoader;
 public final class FlashbackBridge {
 
     public static final String MOD_ID = "flashback";
+    /** Oldest Flashback this client was written against (keep in sync with fabric.mod.json "suggests"). */
+    public static final String MIN_VERSION = "0.43.0";
 
-    private static final boolean LOADED = FabricLoader.getInstance().isModLoaded(MOD_ID);
+    private static final String INSTALLED_VERSION = FabricLoader.getInstance().getModContainer(MOD_ID)
+            .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse(null);
+    private static final boolean PRESENT = INSTALLED_VERSION != null;
+    private static final boolean COMPATIBLE = PRESENT && versionAtLeast(INSTALLED_VERSION, MIN_VERSION);
+    /** True only when Flashback is installed AND new enough: every Flashback call is gated on this. */
+    private static final boolean LOADED = COMPATIBLE;
 
     private FlashbackBridge() {
     }
 
     public static boolean isLoaded() {
         return LOADED;
+    }
+
+    /** Why recording is unavailable, or null when Flashback is usable. Shown in the RSHIFT menu tooltip. */
+    public static String unavailableReason() {
+        if (!PRESENT) {
+            return "Flashback mod is not installed (or was not detected).\n"
+                    + "Install Flashback " + MIN_VERSION + " or newer for Minecraft 26.2 to record replays.";
+        }
+        if (!COMPATIBLE) {
+            return "Flashback " + INSTALLED_VERSION + " is not supported.\n"
+                    + "Update Flashback to " + MIN_VERSION + " or newer for Minecraft 26.2.";
+        }
+        return null;
+    }
+
+    private static boolean versionAtLeast(String installed, String min) {
+        try {
+            return Version.parse(installed).compareTo(Version.parse(min)) >= 0;
+        } catch (VersionParsingException e) {
+            return false; // unknown version scheme: treat as unsupported rather than risk a crash
+        }
     }
 
     /** Registers our Flashback timeline elements. Call once from the client entrypoint. */
