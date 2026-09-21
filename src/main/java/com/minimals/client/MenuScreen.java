@@ -23,6 +23,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
@@ -366,10 +367,25 @@ public class MenuScreen extends Screen {
         int bottom = viewportBottom();
         for (AbstractWidget widget : contentWidgets) {
             widget.setY(baseY.get(widget) - scrollOffset);
-            boolean inside = widget.getY() >= top && widget.getY() + widget.getHeight() <= bottom;
+            // Visible while it overlaps the viewport (clipped by scissor when drawn), so tall
+            // rows like the colour wheel no longer vanish until fully scrolled into view.
+            boolean inside = widget.getY() + widget.getHeight() > top && widget.getY() < bottom;
             widget.visible = inside;
             widget.active = inside;
         }
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // Partially scrolled rows are clipped visually; don't let their hidden part take clicks.
+        if (event.y() < viewportTop() || event.y() > viewportBottom()) {
+            for (AbstractWidget widget : contentWidgets) {
+                if (widget.isMouseOver(event.x(), event.y())) {
+                    return false;
+                }
+            }
+        }
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
@@ -452,11 +468,13 @@ public class MenuScreen extends Screen {
             for (AbstractWidget widget : chromeWidgets) {
                 widget.extractRenderState(graphics, mouseX, mouseY, delta);
             }
+            graphics.enableScissor(px + SIDEBAR_W, viewportTop(), px + PANEL_W, viewportBottom());
             for (AbstractWidget widget : contentWidgets) {
                 Animation row = rowFade.get(widget);
                 UiRenderer.setFade(openFade.get() * (row == null ? 1f : row.get()));
                 widget.extractRenderState(graphics, mouseX, mouseY, delta);
             }
+            graphics.disableScissor();
         } finally {
             UiRenderer.setFade(1f);
         }
