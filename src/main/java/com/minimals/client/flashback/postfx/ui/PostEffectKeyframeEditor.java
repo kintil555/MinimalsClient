@@ -9,6 +9,7 @@ import com.moulberry.flashback.editor.ui.ReplayUI;
 import com.moulberry.flashback.keyframe.Keyframe;
 import com.moulberry.flashback.keyframe.KeyframeType;
 import imgui.moulberry90.ImGui;
+import imgui.moulberry90.type.ImInt;
 import imgui.moulberry90.type.ImString;
 
 import java.util.ArrayList;
@@ -62,10 +63,10 @@ public final class PostEffectKeyframeEditor {
 
     /** Draft edits are direct: the draft is private and not yet on the timeline (no undo needed). */
     private static void editDraft(PostEffectKeyframe draft) {
-        int[] kind = {draft.kind.ordinal()};
+        ImInt kind = new ImInt(draft.kind.ordinal());
         ImGui.setNextItemWidth(160);
         if (ImGui.combo("Effect", kind, KIND_LABELS)) {
-            draft.kind = PostFxKind.values()[kind[0]];
+            draft.kind = PostFxKind.values()[kind.get()];
         }
         if (draft.kind == PostFxKind.CUSTOM) {
             draft.customId = customIdField(draft, draft.customId);
@@ -83,10 +84,10 @@ public final class PostEffectKeyframeEditor {
     public static void render(PostEffectKeyframe keyframe, Consumer<Consumer<Keyframe>> update) {
         PostFxKind kind = keyframe.kind;
 
-        int[] kindIdx = {kind.ordinal()};
+        ImInt kindIdx = new ImInt(kind.ordinal());
         ImGui.setNextItemWidth(160);
-        if (ImGui.combo("Effect", kindIdx, KIND_LABELS) && kindIdx[0] != kind.ordinal()) {
-            PostFxKind chosen = PostFxKind.values()[kindIdx[0]];
+        if (ImGui.combo("Effect", kindIdx, KIND_LABELS) && kindIdx.get() != kind.ordinal()) {
+            PostFxKind chosen = PostFxKind.values()[kindIdx.get()];
             update.accept(k -> ((PostEffectKeyframe) k).kind = chosen);
         }
 
@@ -107,10 +108,10 @@ public final class PostEffectKeyframeEditor {
         drawKindParams(keyframe, update);
 
         ImGui.separator();
-        int[] scopeIdx = {keyframe.scope.ordinal()};
+        ImInt scopeIdx = new ImInt(keyframe.scope.ordinal());
         ImGui.setNextItemWidth(160);
-        if (ImGui.combo("Apply to", scopeIdx, SCOPE_LABELS) && scopeIdx[0] != keyframe.scope.ordinal()) {
-            PostFxScope chosen = PostFxScope.values()[scopeIdx[0]];
+        if (ImGui.combo("Apply to", scopeIdx, SCOPE_LABELS) && scopeIdx.get() != keyframe.scope.ordinal()) {
+            PostFxScope chosen = PostFxScope.values()[scopeIdx.get()];
             update.accept(k -> ((PostEffectKeyframe) k).scope = chosen);
         }
 
