@@ -248,7 +248,7 @@ public class MinimalClientMod implements ClientModInitializer {
         for (HudElement element : HudRegistry.all()) {
             element.onScreenSize(graphics.guiWidth(), graphics.guiHeight());
             if (element.isActive()) {
-                element.render(graphics, deltaTracker, element.getX(graphics.guiWidth()), element.getY(graphics.guiHeight()));
+                element.renderScaled(graphics, deltaTracker, element.getX(graphics.guiWidth()), element.getY(graphics.guiHeight()));
             }
         }
     }

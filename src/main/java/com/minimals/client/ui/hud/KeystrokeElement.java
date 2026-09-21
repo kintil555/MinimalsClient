@@ -3,23 +3,21 @@ package com.minimals.client.ui.hud;
 import com.minimals.client.module.KeystrokeModule;
 import com.minimals.client.module.ModuleManager;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 /**
- * WASD + LMB/RMB CPS keystroke display, laid out like a typical keystroke overlay: W on top,
- * A/S/D below it, LMB/RMB (with CPS) below that.
+ * WASD keystroke display: W on top, A/S/D below, optional Shift and Space bars, and optional
+ * LMB/RMB boxes with CPS. Spacing, idle/pressed colours and which rows show are all module
+ * settings; overall size is the generic HUD-editor scale.
  */
 public class KeystrokeElement extends HudElement {
 
     private static final int KEY_SIZE = 20;
-    private static final int GAP = 2;
     private static final int CLICK_H = 24;
-
-    private static final int BG = 0x80808080;
-    private static final int BG_ACTIVE = 0xC0A0A0A0;
-    private static final int TEXT = 0xFFFFFFFF;
+    private static final int BAR_H = 14;
 
     public KeystrokeElement() {
         super("keystrokes", "Keystrokes", 0.02f, 0.55f);
@@ -36,56 +34,80 @@ public class KeystrokeElement extends HudElement {
 
     @Override
     public int getWidth() {
-        return KEY_SIZE * 3 + GAP * 2;
+        int gap = module().spacing.get();
+        return KEY_SIZE * 3 + gap * 2;
     }
 
     @Override
     public int getHeight() {
-        return KEY_SIZE * 2 + GAP + CLICK_H + GAP;
+        KeystrokeModule m = module();
+        int gap = m.spacing.get();
+        int h = KEY_SIZE * 2 + gap;
+        if (m.showMouse.get()) {
+            h += gap + CLICK_H;
+        }
+        if (m.showShift.get()) {
+            h += gap + BAR_H;
+        }
+        if (m.showSpace.get()) {
+            h += gap + BAR_H;
+        }
+        return h;
     }
 
     @Override
     public void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, int x, int y) {
         Minecraft mc = Minecraft.getInstance();
-        Font font = mc.font;
         if (mc.options == null) {
             return;
         }
+        Font font = mc.font;
+        KeystrokeModule m = module();
+        int gap = m.spacing.get();
+        int colW = getWidth();
+        int wX = x + KEY_SIZE + gap;
 
-        int colW = KEY_SIZE * 3 + GAP * 2;
-        int wX = x + KEY_SIZE + GAP;
+        drawKey(graphics, font, m, wX, y, KEY_SIZE, KEY_SIZE, "W", mc.options.keyUp);
 
-        drawKey(graphics, font, wX, y, "W", mc.options.keyUp.isDown());
+        int row2Y = y + KEY_SIZE + gap;
+        drawKey(graphics, font, m, x, row2Y, KEY_SIZE, KEY_SIZE, "A", mc.options.keyLeft);
+        drawKey(graphics, font, m, wX, row2Y, KEY_SIZE, KEY_SIZE, "S", mc.options.keyDown);
+        drawKey(graphics, font, m, x + (KEY_SIZE + gap) * 2, row2Y, KEY_SIZE, KEY_SIZE, "D", mc.options.keyRight);
 
-        int row2Y = y + KEY_SIZE + GAP;
-        drawKey(graphics, font, x, row2Y, "A", mc.options.keyLeft.isDown());
-        drawKey(graphics, font, wX, row2Y, "S", mc.options.keyDown.isDown());
-        drawKey(graphics, font, x + (KEY_SIZE + GAP) * 2, row2Y, "D", mc.options.keyRight.isDown());
+        int cursorY = row2Y + KEY_SIZE + gap;
 
-        int clickY = row2Y + KEY_SIZE + GAP;
-        int halfW = (colW - GAP) / 2;
-        boolean leftDown = mc.mouseHandler != null && mc.mouseHandler.isLeftPressed();
-        boolean rightDown = mc.mouseHandler != null && mc.mouseHandler.isRightPressed();
-
-        drawClickBox(graphics, font, x, clickY, halfW, "LMB", module().getLeftCps(), leftDown);
-        drawClickBox(graphics, font, x + halfW + GAP, clickY, colW - halfW - GAP, "RMB",
-                module().getRightCps(), rightDown);
+        if (m.showMouse.get()) {
+            int halfW = (colW - gap) / 2;
+            boolean leftDown = mc.mouseHandler != null && mc.mouseHandler.isLeftPressed();
+            boolean rightDown = mc.mouseHandler != null && mc.mouseHandler.isRightPressed();
+            drawClickBox(graphics, font, m, x, cursorY, halfW, "LMB", m.getLeftCps(), leftDown);
+            drawClickBox(graphics, font, m, x + halfW + gap, cursorY, colW - halfW - gap, "RMB",
+                    m.getRightCps(), rightDown);
+            cursorY += CLICK_H + gap;
+        }
+        if (m.showShift.get()) {
+            drawKey(graphics, font, m, x, cursorY, colW, BAR_H, "Shift", mc.options.keyShift);
+            cursorY += BAR_H + gap;
+        }
+        if (m.showSpace.get()) {
+            drawKey(graphics, font, m, x, cursorY, colW, BAR_H, "Space", mc.options.keyJump);
+        }
     }
 
-    private static void drawKey(GuiGraphicsExtractor graphics, Font font, int x, int y, String label, boolean down) {
-        graphics.fill(x, y, x + KEY_SIZE, y + KEY_SIZE, down ? BG_ACTIVE : BG);
-        int textX = x + (KEY_SIZE - font.width(label)) / 2;
-        int textY = y + (KEY_SIZE - 8) / 2;
-        graphics.text(font, label, textX, textY, TEXT, true);
+    private static void drawKey(GuiGraphicsExtractor graphics, Font font, KeystrokeModule m, int x, int y,
+                                int w, int h, String label, KeyMapping key) {
+        graphics.fill(x, y, x + w, y + h, m.fillColor(key.isDown()));
+        int textX = x + (w - font.width(label)) / 2;
+        int textY = y + (h - 8) / 2;
+        graphics.text(font, label, textX, textY, 0xFF000000 | m.textColor.get(), true);
     }
 
-    private static void drawClickBox(GuiGraphicsExtractor graphics, Font font, int x, int y, int width,
-                                      String label, int cps, boolean down) {
-        graphics.fill(x, y, x + width, y + CLICK_H, down ? BG_ACTIVE : BG);
+    private static void drawClickBox(GuiGraphicsExtractor graphics, Font font, KeystrokeModule m, int x, int y,
+                                     int width, String label, int cps, boolean down) {
+        graphics.fill(x, y, x + width, y + CLICK_H, m.fillColor(down));
+        int color = 0xFF000000 | m.textColor.get();
         String cpsText = cps + " CPS";
-        int labelX = x + (width - font.width(label)) / 2;
-        int cpsX = x + (width - font.width(cpsText)) / 2;
-        graphics.text(font, label, labelX, y + 2, TEXT, true);
-        graphics.text(font, cpsText, cpsX, y + 2 + 9, TEXT, true);
+        graphics.text(font, label, x + (width - font.width(label)) / 2, y + 2, color, true);
+        graphics.text(font, cpsText, x + (width - font.width(cpsText)) / 2, y + 2 + 9, color, true);
     }
 }

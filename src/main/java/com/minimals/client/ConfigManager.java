@@ -113,6 +113,8 @@ public final class ConfigManager {
             }
             lines.add("hud." + element.getId() + ".x=" + element.getXFrac());
             lines.add("hud." + element.getId() + ".y=" + element.getYFrac());
+            lines.add("hud." + element.getId() + ".sx=" + element.getScaleX());
+            lines.add("hud." + element.getId() + ".sy=" + element.getScaleY());
         }
 
         try {
@@ -212,10 +214,12 @@ public final class ConfigManager {
             }
             try {
                 float v = Float.parseFloat(value);
-                if (axis.equals("x")) {
-                    element.setXFrac(v);
-                } else if (axis.equals("y")) {
-                    element.setYFrac(v);
+                switch (axis) {
+                    case "x" -> element.setXFrac(v);
+                    case "y" -> element.setYFrac(v);
+                    case "sx" -> element.setScale(v, element.getScaleY());
+                    case "sy" -> element.setScale(element.getScaleX(), v);
+                    default -> { }
                 }
             } catch (NumberFormatException ignored) {
                 // keep the current position

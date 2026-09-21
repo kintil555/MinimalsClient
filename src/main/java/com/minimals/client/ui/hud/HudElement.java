@@ -17,6 +17,12 @@ public abstract class HudElement {
     private float xFrac;
     private float yFrac;
 
+    /** User scale (1.0 = native size), independent per axis. Applies to every HUD element. */
+    public static final float MIN_SCALE = 0.5f;
+    public static final float MAX_SCALE = 3.0f;
+    private float scaleX = 1f;
+    private float scaleY = 1f;
+
     protected HudElement(String id, String displayName, float defaultXFrac, float defaultYFrac) {
         this.id = id;
         this.displayName = displayName;
@@ -72,6 +78,48 @@ public abstract class HudElement {
 
     public void setYFrac(float value) {
         this.yFrac = clampFrac(value);
+    }
+
+    public float getScaleX() {
+        return scaleX;
+    }
+
+    public float getScaleY() {
+        return scaleY;
+    }
+
+    public void setScale(float sx, float sy) {
+        this.scaleX = clampScale(sx);
+        this.scaleY = clampScale(sy);
+    }
+
+    /** Size on screen after the user scale is applied (used for editor hitboxes and clamping). */
+    public int getScaledWidth() {
+        return Math.round(getWidth() * scaleX);
+    }
+
+    public int getScaledHeight() {
+        return Math.round(getHeight() * scaleY);
+    }
+
+    private static float clampScale(float v) {
+        return Math.max(MIN_SCALE, Math.min(MAX_SCALE, v));
+    }
+
+    /**
+     * Draws the element with the user scale applied, anchored at its top-left corner. Every
+     * caller (live HUD and HUD editor) should use this instead of {@link #render} directly.
+     */
+    public void renderScaled(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, int x, int y) {
+        if (scaleX == 1f && scaleY == 1f) {
+            render(graphics, deltaTracker, x, y);
+            return;
+        }
+        graphics.pose().pushMatrix();
+        graphics.pose().translate((float) x, (float) y);
+        graphics.pose().scale(scaleX, scaleY);
+        render(graphics, deltaTracker, 0, 0);
+        graphics.pose().popMatrix();
     }
 
     private static float clampFrac(float value) {

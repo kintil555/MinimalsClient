@@ -5,8 +5,10 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Lets the player drag any HUD element (arraylist, keystrokes, ...) to a new spot. Hold Shift
@@ -16,6 +18,7 @@ public class HudEditorScreen extends Screen {
 
     private static final int GRID_SIZE = 8;
     private static final int HANDLE_PADDING = 4;
+    private static final float SCALE_STEP = 0.05f;
 
     /** 15% opacity (0x26 = 38/255) so the drag box never hides the real HUD underneath. */
     private static final int BOX_ALPHA = 0x26;
@@ -66,25 +69,25 @@ public class HudEditorScreen extends Screen {
                 if (isDragging) {
                     graphics.pose().translate(fx - x, fy - y);
                 }
-                element.render(graphics, tracker, x, y);
+                element.renderScaled(graphics, tracker, x, y);
                 graphics.pose().popMatrix();
             } else {
                 // Inactive elements still get a faint placeholder so they can be repositioned
                 // even while their module is off.
                 UiRenderer.roundedRectOutline(graphics, x - HANDLE_PADDING, y - HANDLE_PADDING,
-                        x + element.getWidth() + HANDLE_PADDING, y + element.getHeight() + HANDLE_PADDING,
+                        x + element.getScaledWidth() + HANDLE_PADDING, y + element.getScaledHeight() + HANDLE_PADDING,
                         4, BOX_WHITE);
                 UiRenderer.text(graphics, element.getDisplayName(), x, y, UiRenderer.TEXT_SECONDARY);
             }
 
             int boxX1 = (int) Math.floor(fx) - HANDLE_PADDING;
             int boxY1 = (int) Math.floor(fy) - HANDLE_PADDING;
-            int boxX2 = boxX1 + element.getWidth() + HANDLE_PADDING * 2;
-            int boxY2 = boxY1 + element.getHeight() + HANDLE_PADDING * 2;
+            int boxX2 = boxX1 + element.getScaledWidth() + HANDLE_PADDING * 2;
+            int boxY2 = boxY1 + element.getScaledHeight() + HANDLE_PADDING * 2;
             drawBox(graphics, boxX1, boxY1, boxX2, boxY2, isDragging ? BOX_ACCENT : BOX_WHITE);
         }
 
-        UiRenderer.text(graphics, "Drag elements to reposition - hold Shift to snap to grid - Esc to close",
+        UiRenderer.text(graphics, "Drag = move - Shift = snap - Scroll = scale (Shift: Y, Ctrl: X) - R = reset scale - Esc = close",
                 10, height - 16, UiRenderer.TEXT_SECONDARY);
     }
 
@@ -119,8 +122,8 @@ public class HudEditorScreen extends Screen {
             newX = Math.round(newX / GRID_SIZE) * GRID_SIZE;
             newY = Math.round(newY / GRID_SIZE) * GRID_SIZE;
         }
-        newX = Math.max(0f, Math.min(width - dragging.getWidth(), newX));
-        newY = Math.max(0f, Math.min(height - dragging.getHeight(), newY));
+        newX = Math.max(0f, Math.min(width - dragging.getScaledWidth(), newX));
+        newY = Math.max(0f, Math.min(height - dragging.getScaledHeight(), newY));
         dragging.setPosition(newX, newY, width, height);
     }
 
@@ -141,8 +144,8 @@ public class HudEditorScreen extends Screen {
             element.onScreenSize(width, height);
             int x = element.getX(width);
             int y = element.getY(height);
-            if (mx >= x - HANDLE_PADDING && mx <= x + element.getWidth() + HANDLE_PADDING
-                    && my >= y - HANDLE_PADDING && my <= y + element.getHeight() + HANDLE_PADDING) {
+            if (mx >= x - HANDLE_PADDING && mx <= x + element.getScaledWidth() + HANDLE_PADDING
+                    && my >= y - HANDLE_PADDING && my <= y + element.getScaledHeight() + HANDLE_PADDING) {
                 dragging = element;
                 dragOffsetX = (float) event.x() - element.getXExact(width);
                 dragOffsetY = (float) event.y() - element.getYExact(height);
@@ -150,6 +153,52 @@ public class HudEditorScreen extends Screen {
             }
         }
         return super.mouseClicked(event, doubleClick);
+    }
+
+    /** Element under the cursor, or null. */
+    private HudElement elementAt(double mx, double my) {
+        for (HudElement element : HudRegistry.all()) {
+            element.onScreenSize(width, height);
+            int x = element.getX(width);
+            int y = element.getY(height);
+            if (mx >= x - HANDLE_PADDING && mx <= x + element.getScaledWidth() + HANDLE_PADDING
+                    && my >= y - HANDLE_PADDING && my <= y + element.getScaledHeight() + HANDLE_PADDING) {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        HudElement target = dragging != null ? dragging : elementAt(mouseX, mouseY);
+        if (target == null || scrollY == 0) {
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        }
+        long window = Minecraft.getInstance().getWindow().handle();
+        boolean shift = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
+        boolean ctrl = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
+                || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
+        float d = scrollY > 0 ? SCALE_STEP : -SCALE_STEP;
+        float sx = target.getScaleX() + (shift && !ctrl ? 0f : d);
+        float sy = target.getScaleY() + (ctrl && !shift ? 0f : d);
+        target.setScale(Math.round(sx * 20f) / 20f, Math.round(sy * 20f) / 20f);
+        return true;
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (event.key() == GLFW.GLFW_KEY_R) {
+            HudElement target = dragging != null ? dragging : elementAt(
+                    Minecraft.getInstance().mouseHandler.getScaledXPos(Minecraft.getInstance().getWindow()),
+                    Minecraft.getInstance().mouseHandler.getScaledYPos(Minecraft.getInstance().getWindow()));
+            if (target != null) {
+                target.setScale(1f, 1f);
+                return true;
+            }
+        }
+        return super.keyPressed(event);
     }
 
     @Override
