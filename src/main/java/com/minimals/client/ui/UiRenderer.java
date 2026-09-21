@@ -25,16 +25,19 @@ public final class UiRenderer {
     }
 
     /**
-     * Anti-aliased rounded rectangle. The straight parts are plain fills; each r x r corner is
-     * rasterised per pixel with coverage = clamp(r - distance(pixel centre, corner centre) + 0.5),
-     * i.e. the signed-distance-field edge ramp, so curved edges get partial alpha instead of
-     * stair-steps. Fully covered runs in a corner row are merged into a single fill, so only
-     * the ~1px edge band costs one fill per pixel. Coverage scales the colour's alpha, which
-     * composes correctly with the vanilla SrcAlpha blend for translucent colours too.
+     * Anti-aliased rounded rectangle drawn at SCREEN resolution. Minecraft's GUI scale makes one
+     * GUI pixel g x g real pixels, so anti-aliasing per GUI pixel still shows chunky g-pixel
+     * steps at scale 2-4. Here the pose is scaled by 1/g and the whole shape is emitted in real
+     * screen pixels (coordinates x g), so every corner pixel gets its own partial alpha and the
+     * curve is smooth at any GUI scale. At scale 1 it is identical to per-GUI-pixel coverage.
+     * The straight parts are plain fills; each corner pixel uses the signed-distance ramp
+     * coverage = clamp(r - dist(pixel centre, corner centre) + 0.5), and fully covered runs of a
+     * corner row are merged into one fill so only the ~1px edge band costs a fill per pixel.
+     * Coverage scales the colour's alpha, which composes correctly with the SrcAlpha blend.
      */
     private static void roundedRectSmooth(GuiGraphicsExtractor graphics, int x1, int y1, int x2, int y2, int radius, int color) {
-        int r = Math.min(radius, Math.min((x2 - x1) / 2, (y2 - y1) / 2));
-        if (r <= 1) {
+        int guiRadius = Math.min(radius, Math.min((x2 - x1) / 2, (y2 - y1) / 2));
+        if (guiRadius <= 1) {
             // too small for a visible curve; the pixel path is identical and cheaper
             roundedRectPixel(graphics, x1, y1, x2, y2, radius, color);
             return;
@@ -45,10 +48,22 @@ public final class UiRenderer {
             return;
         }
 
+        int g = Math.max(1, Minecraft.getInstance().getWindow().getGuiScale());
+        if (g > 1) {
+            graphics.pose().pushMatrix();
+            graphics.pose().scale(1f / g, 1f / g);
+        }
+        // Everything below is in real screen pixels of the (possibly scaled-down) pose.
+        int sx1 = x1 * g;
+        int sy1 = y1 * g;
+        int sx2 = x2 * g;
+        int sy2 = y2 * g;
+        int r = guiRadius * g;
+
         // center cross (avoids double-covering corners)
-        graphics.fill(x1 + r, y1, x2 - r, y2, color);
-        graphics.fill(x1, y1 + r, x1 + r, y2 - r, color);
-        graphics.fill(x2 - r, y1 + r, x2, y2 - r, color);
+        graphics.fill(sx1 + r, sy1, sx2 - r, sy2, color);
+        graphics.fill(sx1, sy1 + r, sx1 + r, sy2 - r, color);
+        graphics.fill(sx2 - r, sy1 + r, sx2, sy2 - r, color);
 
         float rf = r;
         for (int dy = 0; dy < r; dy++) {
@@ -65,17 +80,21 @@ public final class UiRenderer {
                 }
                 if (cover > 0f) {
                     int edge = ARGB.color(Math.round(baseAlpha * cover), color);
-                    fillPixelRow(graphics, x1, x2, y1, y2, r, dx, dy, edge);
+                    fillPixelRow(graphics, sx1, sx2, sy1, sy2, r, dx, dy, edge);
                 }
             }
             if (solidFrom < r) {
                 int len = r - solidFrom;
                 // solid run of the row, mirrored into all four corners
-                graphics.fill(x1 + solidFrom, y1 + dy, x1 + solidFrom + len, y1 + dy + 1, color);
-                graphics.fill(x2 - solidFrom - len, y1 + dy, x2 - solidFrom, y1 + dy + 1, color);
-                graphics.fill(x1 + solidFrom, y2 - dy - 1, x1 + solidFrom + len, y2 - dy, color);
-                graphics.fill(x2 - solidFrom - len, y2 - dy - 1, x2 - solidFrom, y2 - dy, color);
+                graphics.fill(sx1 + solidFrom, sy1 + dy, sx1 + solidFrom + len, sy1 + dy + 1, color);
+                graphics.fill(sx2 - solidFrom - len, sy1 + dy, sx2 - solidFrom, sy1 + dy + 1, color);
+                graphics.fill(sx1 + solidFrom, sy2 - dy - 1, sx1 + solidFrom + len, sy2 - dy, color);
+                graphics.fill(sx2 - solidFrom - len, sy2 - dy - 1, sx2 - solidFrom, sy2 - dy, color);
             }
+        }
+
+        if (g > 1) {
+            graphics.pose().popMatrix();
         }
     }
 
