@@ -6,6 +6,7 @@
   "plugin": "com.minimals.client.flashback.mixin.FlashbackMixinPlugin",
   "client": [
     "PostEffectRenderMixin",
+    "EditorStateApplyMixin",
     "KeyframeGsonMixin",
     "FlashbackGsonMixin",
     "BlockPickHighlightMixin"
