@@ -226,6 +226,9 @@ public class MenuChoiceScreen extends Screen {
             for (Slot s : Slot.values()) {
                 drawSegment(graphics, s, scale, spin, hoverAnim[s.ordinal()].get());
             }
+            // Solid hub behind the centre text/icon so it reads as a panel, not a transparent hole
+            // into the world (the ring's inner edge is otherwise the world showing through).
+            drawHub(graphics, scale);
             // icons + centre text only once the ring has nearly settled, so they don't smear
             float detail = Mth.clamp((p - 0.55f) / 0.45f, 0f, 1f);
             UiRenderer.setFade(detail * appear);
@@ -306,6 +309,25 @@ public class MenuChoiceScreen extends Screen {
     public void removed() {
         UiRenderer.setFade(1f);
         super.removed();
+    }
+
+    /**
+     * Solid circular panel filling the ring's inner hole, so the centre text/icon sit on a
+     * readable dark panel instead of the transparent world. paintSector only handles sectors
+     * under 180deg, so a full circle is two halves (front/back) at slightly different centers.
+     */
+    private void drawHub(GuiGraphicsExtractor g, float scale) {
+        int r = Math.round((INNER_R - 2) * scale);
+        if (r <= 0) {
+            return;
+        }
+        int fillColor = UiRenderer.withOpacity(0xF00E0E12);
+        int lineColor = UiRenderer.withOpacity(OUTLINE);
+        paintSector(g, 0f, 0, r, 90.0, fillColor);
+        paintSector(g, 180f, 0, r, 90.0, fillColor);
+        int ringR = Math.round(INNER_R * scale);
+        paintSector(g, 0f, r, ringR, 90.0, lineColor);
+        paintSector(g, 180f, r, ringR, 90.0, lineColor);
     }
 
     private void drawSegment(GuiGraphicsExtractor g, Slot slot, float scale, float spin, float hover) {
@@ -462,15 +484,18 @@ public class MenuChoiceScreen extends Screen {
         UiRenderer.text(g, label, ix - tw / 2, iy + 6, tint);
     }
 
-    /** Centre text: hovered segment name, or the idle title. Larger than normal text. */
+    /** Centre text: hovered segment name, or the idle title. Scaled up, but never past the
+     *  inner circle's edge — a fixed 1.5x scale overflowed for longer labels like the idle title. */
     private void drawCenterText(GuiGraphicsExtractor g) {
         String text = hovered == null ? IDLE_TITLE
                 : hovered == Slot.RECORD && FlashbackBridge.isRecording() ? "Stop Recording" : hovered.label;
         int tw = UiRenderer.textWidth(text);
+        float maxHalfWidth = INNER_R * 0.78f;
+        float textScale = tw <= 0 ? 1.5f : Math.min(1.5f, (maxHalfWidth * 2f) / tw);
         var pose = g.pose();
         pose.pushMatrix();
         pose.translate(cx(), cy());
-        pose.scale(1.5f, 1.5f);
+        pose.scale(textScale, textScale);
         UiRenderer.text(g, text, -tw / 2, -4, hovered == null ? UiRenderer.TEXT_SECONDARY : 0xFFC4B5FD);
         pose.popMatrix();
     }
