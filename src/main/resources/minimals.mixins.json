@@ -26,7 +26,8 @@
     "ShulkerContainerScreenMixin",
     "DeathScreenMixin",
     "WidgetHoverSoundMixin",
-    "AvatarRendererMixin"
+    "AvatarRendererMixin",
+    "LivingEntityRendererAddLayerInvoker"
   ],
   "mixins": [
     "PathNavigationMixin"
