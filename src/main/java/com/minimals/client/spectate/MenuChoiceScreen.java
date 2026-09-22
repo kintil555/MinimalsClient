@@ -17,9 +17,9 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.Util;
 
 /**
- * "RSHIFT Option": radial (circle) chooser shown when RShift is pressed. Three outlined
- * segments (Menu / Spectate / Record) sit on a ring. Opening plays a grow + spin animation
- * that eases to a stop; the centre shows the name of the segment under the mouse.
+ * "RSHIFT Option": radial (circle) chooser shown when RShift is pressed. Four outlined
+ * segments (Menu / Record / Spectate / Dressing Room) sit on a ring. Opening plays a grow + spin
+ * animation that eases to a stop; the centre shows the name of the segment under the mouse.
  */
 public class MenuChoiceScreen extends Screen {
 
@@ -56,8 +56,9 @@ public class MenuChoiceScreen extends Screen {
     private enum Slot {
         // centre angle in degrees, 0 = up, clockwise
         MENU("Menu", 0f),
-        RECORD("Record", 120f),
-        SPECTATE("Spectate", 240f);
+        RECORD("Record", 90f),
+        SPECTATE("Spectate", 180f),
+        DRESS("Dressing Room", 270f);
 
         final String label;
         final float centerDeg;
@@ -77,9 +78,15 @@ public class MenuChoiceScreen extends Screen {
 
     private final Animation open = new Animation(0f, OPEN_MS);
     /** One 0..1 hover progress per slot (index = Slot.ordinal()), eased so growth and colour glide. */
-    private final Animation[] hoverAnim = {
-            new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS), new Animation(0f, HOVER_MS)
-    };
+    private final Animation[] hoverAnim = buildHoverAnimations();
+
+    private static Animation[] buildHoverAnimations() {
+        Animation[] anims = new Animation[Slot.values().length];
+        for (int i = 0; i < anims.length; i++) {
+            anims[i] = new Animation(0f, HOVER_MS);
+        }
+        return anims;
+    }
     private Slot hovered;
     /** Slot the cursor was over on the previous frame, to detect entering a new one. */
     private Slot lastHovered;
@@ -140,6 +147,7 @@ public class MenuChoiceScreen extends Screen {
         switch (slot) {
             case MENU -> mc.gui.setScreen(MenuScreen.create());
             case SPECTATE -> mc.gui.setScreen(new SpectateScreen());
+            case DRESS -> mc.gui.setScreen(new com.minimals.client.dressing.DressingRoomScreen());
             case RECORD -> {
                 if (FlashbackBridge.isRecording()) {
                     FlashbackBridge.finishRecording();
@@ -185,7 +193,7 @@ public class MenuChoiceScreen extends Screen {
     }
 
     private static boolean inSegment(double angleDeg, float centerDeg) {
-        double half = 60.0 - GAP_DEG / 2.0;
+        double half = 90.0 - GAP_DEG / 2.0;
         double d = Math.abs(Mth.wrapDegrees(angleDeg - centerDeg));
         return d <= half;
     }
@@ -323,7 +331,7 @@ public class MenuChoiceScreen extends Screen {
     }
 
     private static double halfDeg(double extra) {
-        return 60.0 - GAP_DEG / 2.0 + extra;
+        return 90.0 - GAP_DEG / 2.0 + extra;
     }
 
     /**
@@ -432,6 +440,17 @@ public class MenuChoiceScreen extends Screen {
                 g.fill(ix - 8, iy - 8, ix - 6, iy + 2, c);
                 g.fill(ix + 6, iy - 8, ix + 8, iy + 2, c);
                 g.fill(ix - 2, iy - 5, ix + 2, iy - 1, c);
+            }
+            case DRESS -> {
+                // simple coat hanger: hook + triangle body
+                int c = UiRenderer.withOpacity(tint);
+                g.fill(ix - 1, iy - 13, ix + 1, iy - 9, c);
+                g.fill(ix - 8, iy - 9, ix - 6, iy - 7, c);
+                g.fill(ix + 6, iy - 9, ix + 8, iy - 7, c);
+                g.fill(ix - 6, iy - 7, ix - 3, iy - 5, c);
+                g.fill(ix + 3, iy - 7, ix + 6, iy - 5, c);
+                g.fill(ix - 3, iy - 5, ix + 3, iy - 3, c);
+                g.fill(ix - 9, iy - 3, ix + 9, iy - 1, c);
             }
         }
         // label under the icon, small

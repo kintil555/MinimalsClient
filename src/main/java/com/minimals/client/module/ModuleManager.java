@@ -23,6 +23,7 @@ public class ModuleManager {
         register(new HurtColorModule());
         register(new Module("Fullbright", Module.Category.VISUALS));
         register(new Module("HUD", Module.Category.VISUALS, true));
+        register(new SkinGlowModule());
         register(new KeystrokeModule());
         register(new BlockOnEntitiesModule());
         register(new SnapPerspectiveModule());

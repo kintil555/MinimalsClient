@@ -25,7 +25,8 @@
     "ShulkerTooltipMixin",
     "ShulkerContainerScreenMixin",
     "DeathScreenMixin",
-    "WidgetHoverSoundMixin"
+    "WidgetHoverSoundMixin",
+    "AvatarRendererMixin"
   ],
   "mixins": [
     "PathNavigationMixin"
