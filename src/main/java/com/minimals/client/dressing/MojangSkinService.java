@@ -33,9 +33,6 @@ public final class MojangSkinService {
     private static final String OWN_PROFILE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile";
     private static final String UUID_LOOKUP_ENDPOINT = "https://api.mojang.com/users/profiles/minecraft/";
     private static final String SESSION_PROFILE_ENDPOINT = "https://sessionserver.mojang.com/session/minecraft/profile/";
-    private static final String OWN_PROFILE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile";
-    private static final String UUID_LOOKUP_ENDPOINT = "https://api.mojang.com/users/profiles/minecraft/";
-    private static final String SESSION_PROFILE_ENDPOINT = "https://sessionserver.mojang.com/session/minecraft/profile/";
     private static final Executor IO = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "minimals-skin-service");
         t.setDaemon(true);
@@ -73,14 +70,6 @@ public final class MojangSkinService {
         public static Result fail(String message) {
             return new Result(false, message);
         }
-    }
-
-    /** One cape already unlocked on the account, as returned by the profile endpoint. */
-    public record Cape(String id, String name, boolean active) {
-    }
-
-    /** A skin texture URL fetched from another player's public profile, by username. */
-    public record FetchedSkin(String username, String textureUrl) {
     }
 
     /** One cape already unlocked on the account, as returned by the profile endpoint. */
