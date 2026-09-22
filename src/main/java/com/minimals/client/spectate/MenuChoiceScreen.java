@@ -493,10 +493,32 @@ public class MenuChoiceScreen extends Screen {
                 g.fill(ix - 9, iy - 3, ix + 9, iy - 1, c);
             }
         }
-        // label under the icon, small
+        // label under the icon, small; long labels wrap onto a second line at the last space
+        // instead of overflowing past the segment
         String label = slot == Slot.RECORD && FlashbackBridge.isRecording() ? "Stop" : slot.label;
-        int tw = UiRenderer.textWidth(label);
-        UiRenderer.text(g, label, ix - tw / 2, iy + 6, tint);
+        int maxWidth = Math.round((OUTER_R - INNER_R) * 1.6f);
+        String[] lines = wrapLabel(label, maxWidth);
+        int lineH = 10;
+        int startY = iy + 6 - (lines.length - 1) * lineH / 2;
+        for (int i = 0; i < lines.length; i++) {
+            int tw = UiRenderer.textWidth(lines[i]);
+            UiRenderer.text(g, lines[i], ix - tw / 2, startY + i * lineH, tint);
+        }
+    }
+
+    /**
+     * Splits a label onto two lines at its last space if it's wider than maxWidth; otherwise
+     * returns it unchanged. Only ever produces one or two lines (labels here are short phrases).
+     */
+    private static String[] wrapLabel(String label, int maxWidth) {
+        if (UiRenderer.textWidth(label) <= maxWidth) {
+            return new String[]{label};
+        }
+        int lastSpace = label.lastIndexOf(' ');
+        if (lastSpace <= 0) {
+            return new String[]{label};
+        }
+        return new String[]{label.substring(0, lastSpace), label.substring(lastSpace + 1)};
     }
 
     /** Centre text: hovered segment name, or the idle title. Scaled up, but never past the
