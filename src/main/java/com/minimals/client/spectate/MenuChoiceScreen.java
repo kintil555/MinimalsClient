@@ -411,6 +411,9 @@ public class MenuChoiceScreen extends Screen {
     }
 
     private void drawIcon(GuiGraphicsExtractor g, Slot slot, float scale, float spin, float hover) {
+        if (isLocked(slot)) {
+            return;
+        }
         double mid = (INNER_R + OUTER_R) / 2.0 * (scale + HOVER_GROW * hover * 0.25f);
         double rad = Math.toRadians(slot.centerDeg + spin);
         int ix = cx() + (int) Math.round(Math.sin(rad) * mid);
