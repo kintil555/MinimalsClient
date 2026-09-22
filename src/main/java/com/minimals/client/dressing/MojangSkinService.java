@@ -30,6 +30,12 @@ public final class MojangSkinService {
 
     private static final String SKINS_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile/skins";
     private static final String ACTIVE_CAPE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile/capes/active";
+    private static final String OWN_PROFILE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile";
+    private static final String UUID_LOOKUP_ENDPOINT = "https://api.mojang.com/users/profiles/minecraft/";
+    private static final String SESSION_PROFILE_ENDPOINT = "https://sessionserver.mojang.com/session/minecraft/profile/";
+    private static final String OWN_PROFILE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile";
+    private static final String UUID_LOOKUP_ENDPOINT = "https://api.mojang.com/users/profiles/minecraft/";
+    private static final String SESSION_PROFILE_ENDPOINT = "https://sessionserver.mojang.com/session/minecraft/profile/";
     private static final Executor IO = Executors.newCachedThreadPool(r -> {
         Thread t = new Thread(r, "minimals-skin-service");
         t.setDaemon(true);
@@ -67,6 +73,22 @@ public final class MojangSkinService {
         public static Result fail(String message) {
             return new Result(false, message);
         }
+    }
+
+    /** One cape already unlocked on the account, as returned by the profile endpoint. */
+    public record Cape(String id, String name, boolean active) {
+    }
+
+    /** A skin texture URL fetched from another player's public profile, by username. */
+    public record FetchedSkin(String username, String textureUrl) {
+    }
+
+    /** One cape already unlocked on the account, as returned by the profile endpoint. */
+    public record Cape(String id, String name, boolean active) {
+    }
+
+    /** A skin texture URL fetched from another player's public profile, by username. */
+    public record FetchedSkin(String username, String textureUrl) {
     }
 
     /** Access token of the currently logged-in Microsoft/Mojang account, or null offline. */
@@ -171,6 +193,142 @@ public final class MojangSkinService {
                 return Result.fail(describeError(response.statusCode(), response.body()));
             } catch (IOException | InterruptedException e) {
                 MinimalClientMod.LOGGER.warn("Dressing room: cape clear failed", e);
+                return Result.fail("Network error: " + e.getMessage());
+            }
+        }, IO);
+    }
+
+    /**
+     * Lists the capes already unlocked on this account (own profile endpoint includes a "capes"
+     * array; Mojang does not let arbitrary capes be uploaded, only one of these activated).
+     */
+    public static CompletableFuture<java.util.List<Cape>> fetchOwnCapes() {
+        return CompletableFuture.supplyAsync(() -> {
+            String token = accessToken();
+            if (token == null) {
+                return java.util.List.<Cape>of();
+            }
+            try {
+                HttpRequest request = HttpRequest.newBuilder(URI.create(OWN_PROFILE_ENDPOINT))
+                        .timeout(Duration.ofSeconds(15))
+                        .header("Authorization", "Bearer " + token)
+                        .GET()
+                        .build();
+                HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() / 100 != 2) {
+                    return java.util.List.<Cape>of();
+                }
+                com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(response.body())
+                        .getAsJsonObject();
+                com.google.gson.JsonArray capesArr = root.has("capes") ? root.getAsJsonArray("capes") : null;
+                if (capesArr == null) {
+                    return java.util.List.<Cape>of();
+                }
+                java.util.List<Cape> capes = new java.util.ArrayList<>();
+                for (var el : capesArr) {
+                    var o = el.getAsJsonObject();
+                    String id = o.has("id") ? o.get("id").getAsString() : null;
+                    String name = o.has("alias") ? o.get("alias").getAsString() : id;
+                    boolean active = o.has("state") && "ACTIVE".equals(o.get("state").getAsString());
+                    if (id != null) {
+                        capes.add(new Cape(id, name, active));
+                    }
+                }
+                return capes;
+            } catch (Exception e) {
+                MinimalClientMod.LOGGER.warn("Dressing room: fetching owned capes failed", e);
+                return java.util.List.<Cape>of();
+            }
+        }, IO);
+    }
+
+    /**
+     * Looks up a player's current skin by username via Mojang's public (unauthenticated)
+     * endpoints: username -> uuid -> session profile -> base64 "textures" property -> skin URL.
+     * Works for any player regardless of login state, since these endpoints are public.
+     */
+    public static CompletableFuture<FetchedSkin> fetchSkinByUsername(String username) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                HttpRequest lookup = HttpRequest.newBuilder(URI.create(UUID_LOOKUP_ENDPOINT + username))
+                        .timeout(Duration.ofSeconds(10))
+                        .GET()
+                        .build();
+                HttpResponse<String> lookupResp = CLIENT.send(lookup, HttpResponse.BodyHandlers.ofString());
+                if (lookupResp.statusCode() == 404 || lookupResp.statusCode() / 100 != 2) {
+                    return null;
+                }
+                String uuid = com.google.gson.JsonParser.parseString(lookupResp.body())
+                        .getAsJsonObject().get("id").getAsString();
+
+                HttpRequest profile = HttpRequest.newBuilder(URI.create(SESSION_PROFILE_ENDPOINT + uuid))
+                        .timeout(Duration.ofSeconds(10))
+                        .GET()
+                        .build();
+                HttpResponse<String> profileResp = CLIENT.send(profile, HttpResponse.BodyHandlers.ofString());
+                if (profileResp.statusCode() / 100 != 2) {
+                    return null;
+                }
+                var root = com.google.gson.JsonParser.parseString(profileResp.body()).getAsJsonObject();
+                var properties = root.getAsJsonArray("properties");
+                for (var el : properties) {
+                    var o = el.getAsJsonObject();
+                    if (!"textures".equals(o.get("name").getAsString())) {
+                        continue;
+                    }
+                    String decoded = new String(java.util.Base64.getDecoder().decode(o.get("value").getAsString()));
+                    var texRoot = com.google.gson.JsonParser.parseString(decoded).getAsJsonObject();
+                    var textures = texRoot.getAsJsonObject("textures");
+                    if (textures != null && textures.has("SKIN")) {
+                        String url = textures.getAsJsonObject("SKIN").get("url").getAsString();
+                        return new FetchedSkin(username, url);
+                    }
+                }
+                return null;
+            } catch (Exception e) {
+                MinimalClientMod.LOGGER.warn("Dressing room: fetching skin by username failed", e);
+                return null;
+            }
+        }, IO);
+    }
+
+    /**
+     * Downloads a fetched skin's texture PNG and uploads it as this account's own skin. Mojang's
+     * skin endpoint only accepts an uploaded file, not a URL, so applying someone else's skin
+     * still goes through the same multipart upload as a local file.
+     */
+    public static CompletableFuture<Result> applyFetchedSkin(FetchedSkin skin, Model model) {
+        return CompletableFuture.supplyAsync(() -> {
+            String token = accessToken();
+            if (token == null) {
+                return Result.fail("Not logged in to a Microsoft/Mojang account.");
+            }
+            try {
+                HttpRequest textureReq = HttpRequest.newBuilder(URI.create(skin.textureUrl()))
+                        .timeout(Duration.ofSeconds(15))
+                        .GET()
+                        .build();
+                HttpResponse<byte[]> textureResp = CLIENT.send(textureReq, HttpResponse.BodyHandlers.ofByteArray());
+                if (textureResp.statusCode() / 100 != 2) {
+                    return Result.fail("Could not download that player's skin texture.");
+                }
+                byte[] bytes = textureResp.body();
+                String boundary = "MinimalsDressing" + UUID.randomUUID();
+                byte[] body = buildMultipart(boundary, model.apiName, skin.username() + ".png", bytes);
+
+                HttpRequest request = HttpRequest.newBuilder(URI.create(SKINS_ENDPOINT))
+                        .timeout(Duration.ofSeconds(20))
+                        .header("Authorization", "Bearer " + token)
+                        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                        .build();
+                HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() / 100 == 2) {
+                    return Result.ok("Skin applied from " + skin.username() + ".");
+                }
+                return Result.fail(describeError(response.statusCode(), response.body()));
+            } catch (IOException | InterruptedException e) {
+                MinimalClientMod.LOGGER.warn("Dressing room: applying fetched skin failed", e);
                 return Result.fail("Network error: " + e.getMessage());
             }
         }, IO);
