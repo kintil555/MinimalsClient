@@ -54,18 +54,31 @@ public class MenuChoiceScreen extends Screen {
     private static final float SHAKE_AMPLITUDE = 4f;
 
     private enum Slot {
-        // centre angle in degrees, 0 = up, clockwise
-        MENU("Menu", 0f),
-        RECORD("Record", 90f),
-        SPECTATE("Spectate", 180f),
-        DRESS("Dressing Room", 270f);
+        // Order here = order around the ring. centerDeg is computed below (evenly spaced,
+        // 0 = up, clockwise) so adding/removing a slot never needs manual angle math.
+        MENU("Menu"),
+        RECORD("Record"),
+        SPECTATE("Spectate"),
+        DRESS("Dressing Room");
 
         final String label;
-        final float centerDeg;
+        /** Set once by computeCenterDegs(), after all enum constants exist. */
+        float centerDeg;
 
-        Slot(String label, float centerDeg) {
+        Slot(String label) {
             this.label = label;
-            this.centerDeg = centerDeg;
+        }
+
+        static {
+            computeCenterDegs();
+        }
+
+        private static void computeCenterDegs() {
+            Slot[] all = values();
+            float step = 360f / all.length;
+            for (int i = 0; i < all.length; i++) {
+                all[i].centerDeg = step * i;
+            }
         }
     }
 
@@ -193,7 +206,7 @@ public class MenuChoiceScreen extends Screen {
     }
 
     private static boolean inSegment(double angleDeg, float centerDeg) {
-        double half = 90.0 - GAP_DEG / 2.0;
+        double half = halfDeg(0);
         double d = Math.abs(Mth.wrapDegrees(angleDeg - centerDeg));
         return d <= half;
     }
@@ -352,8 +365,10 @@ public class MenuChoiceScreen extends Screen {
         }
     }
 
+    /** Half-angle of one segment: 360/slotCount, minus the gap, so this scales automatically
+     *  whenever a Slot is added or removed. */
     private static double halfDeg(double extra) {
-        return 90.0 - GAP_DEG / 2.0 + extra;
+        return (360.0 / Slot.values().length) / 2.0 - GAP_DEG / 2.0 + extra;
     }
 
     /**
