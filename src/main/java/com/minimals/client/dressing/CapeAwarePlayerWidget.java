@@ -125,12 +125,16 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         // body and limbs disagree, since head/limb poses in the player model are computed
         // relative to bodyRot and don't all flip the same way. Facing front vs back is instead
         // done as a pure camera rotation on top of the Z-flip: an extra 180-degree yaw when the
-        // Cape tab wants the back visible. The widget's own drag-to-rotate is layered on top of
-        // that, exactly like vanilla PlayerSkinWidget's rotationX/rotationY.
-        Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
+        // Cape tab wants the back visible. Note the yaw is applied BEFORE the Z-flip (not after)
+        // - the Z-flip changes handedness, so appending the same yaw afterward inverts its
+        // effect and also inverts the felt direction of horizontal drag. The widget's own
+        // drag-to-rotate is layered on top of all of that, exactly like vanilla
+        // PlayerSkinWidget's rotationX/rotationY.
+        Quaternionf rotation = new Quaternionf();
         if (back) {
-            rotation.mul(new Quaternionf().rotateY((float) Math.PI));
+            rotation.rotateY((float) Math.PI);
         }
+        rotation.mul(new Quaternionf().rotateZ((float) Math.PI));
         rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
         rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0)));
 

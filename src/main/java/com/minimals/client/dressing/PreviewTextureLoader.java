@@ -83,7 +83,14 @@ final class PreviewTextureLoader {
         return downloader().downloadAndRegisterSkin(id, cacheFile("cape", textureUrl), textureUrl, false)
                 .thenApply(texture -> PlayerSkin.Patch.create(
                         Optional.empty(),
-                        Optional.of(new ClientAsset.ResourceTexture(texture.texturePath())),
+                        // Two-arg ResourceTexture(id, texturePath): texturePath must point at the
+                        // exact Identifier already registered in the TextureManager by
+                        // downloadAndRegisterSkin. The one-arg ResourceTexture(Identifier)
+                        // constructor instead REWRITES the path to "textures/<path>.png" and
+                        // looks it up as a resource-pack asset, which doesn't exist for a
+                        // dynamically downloaded texture - that mismatch is what produced the
+                        // missing-texture (magenta/black) cape.
+                        Optional.of(new ClientAsset.ResourceTexture(texture.texturePath(), texture.texturePath())),
                         Optional.empty(),
                         Optional.empty()));
     }
@@ -95,7 +102,7 @@ final class PreviewTextureLoader {
         Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/skin_" + n);
         return downloader().downloadAndRegisterSkin(id, cacheFile("skin", textureUrl), textureUrl, false)
                 .thenApply(texture -> PlayerSkin.Patch.create(
-                        Optional.of(new ClientAsset.ResourceTexture(texture.texturePath())),
+                        Optional.of(new ClientAsset.ResourceTexture(texture.texturePath(), texture.texturePath())),
                         Optional.empty(),
                         Optional.empty(),
                         Optional.of(model)));
