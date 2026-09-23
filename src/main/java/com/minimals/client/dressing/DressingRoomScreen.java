@@ -158,14 +158,9 @@ public class DressingRoomScreen extends Screen {
 
         TabPillButton(Button delegate, boolean active) {
             super(delegate.getX(), delegate.getY(), delegate.getWidth(), delegate.getHeight(),
-                    delegate.getMessage(), b -> delegate.onPress(), DEFAULT_NARRATION);
+                    delegate.getMessage(), delegate.onPress, DEFAULT_NARRATION);
             this.delegate = delegate;
             this.active = active;
-        }
-
-        @Override
-        public void onPress(net.minecraft.client.input.InputWithModifiers input) {
-            delegate.onPress(input);
         }
 
         @Override
