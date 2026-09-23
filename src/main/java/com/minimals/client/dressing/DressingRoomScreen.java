@@ -134,32 +134,25 @@ public class DressingRoomScreen extends Screen {
 
     private Button tabButton(String label, Tab target, int x, int y, int w) {
         boolean active = tab == target;
-        Button button = Button.builder(Component.literal(label), btn -> {
-                    if (tab != target) {
-                        tab = target;
-                        status = "";
-                        rebuildWidgets();
-                    }
-                })
-                .bounds(x, y, w, TAB_H)
-                .build();
-        return new TabPillButton(button, active);
+        return new TabPillButton(x, y, w, TAB_H, label, active, btn -> {
+            if (tab != target) {
+                tab = target;
+                status = "";
+                rebuildWidgets();
+            }
+        });
     }
 
     /**
-     * Wraps a vanilla Button with an Essential-style pill: flat rows read as dull vanilla UI, so
-     * the active tab gets a filled accent pill + glow underline and inactive tabs get a soft
-     * hover tint instead of the stock 3-slice button texture. Delegates everything else to the
-     * wrapped button so click handling/state stay untouched.
+     * Essential-style pill tab button: flat vanilla rows read as dull default UI, so the active
+     * tab gets a filled accent pill + glow underline and inactive tabs get a soft hover tint
+     * instead of the stock 3-slice button texture.
      */
     private static final class TabPillButton extends Button {
-        private final Button delegate;
         private final boolean active;
 
-        TabPillButton(Button delegate, boolean active) {
-            super(delegate.getX(), delegate.getY(), delegate.getWidth(), delegate.getHeight(),
-                    delegate.getMessage(), delegate.onPress, DEFAULT_NARRATION);
-            this.delegate = delegate;
+        TabPillButton(int x, int y, int w, int h, String label, boolean active, OnPress onPress) {
+            super(x, y, w, h, Component.literal(label), onPress, DEFAULT_NARRATION);
             this.active = active;
         }
 
