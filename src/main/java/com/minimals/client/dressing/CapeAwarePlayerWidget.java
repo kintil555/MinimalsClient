@@ -111,18 +111,26 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         }
 
         if (renderState instanceof LivingEntityRenderState livingState) {
-            livingState.bodyRot = back ? 180.0F : 0.0F;
-            livingState.yRot = back ? 180.0F : 0.0F;
+            livingState.bodyRot = 0.0F;
+            livingState.yRot = 0.0F;
             livingState.xRot = 0.0F;
             livingState.boundingBoxWidth = livingState.boundingBoxWidth / livingState.scale;
             livingState.boundingBoxHeight = livingState.boundingBoxHeight / livingState.scale;
             livingState.scale = 1.0F;
         }
 
-        // Same base convention as vanilla's inventory player preview (a Z-flip puts the model
-        // face-on to the camera); the widget's own drag-to-rotate is layered on top exactly like
-        // vanilla PlayerSkinWidget's rotationX/rotationY.
+        // Base convention: a Z-flip puts the model face-on to the camera (same as vanilla's
+        // inventory player preview). The model's own bodyRot/yRot/xRot are left at 0 (a plain
+        // forward-facing idle pose) always - rotating those instead of the camera made the head,
+        // body and limbs disagree, since head/limb poses in the player model are computed
+        // relative to bodyRot and don't all flip the same way. Facing front vs back is instead
+        // done as a pure camera rotation on top of the Z-flip: an extra 180-degree yaw when the
+        // Cape tab wants the back visible. The widget's own drag-to-rotate is layered on top of
+        // that, exactly like vanilla PlayerSkinWidget's rotationX/rotationY.
         Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
+        if (back) {
+            rotation.mul(new Quaternionf().rotateY((float) Math.PI));
+        }
         rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
         rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0)));
 
