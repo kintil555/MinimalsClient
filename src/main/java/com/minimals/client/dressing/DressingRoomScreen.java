@@ -6,7 +6,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.PlayerSkinWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -43,7 +42,7 @@ public class DressingRoomScreen extends Screen {
     private boolean statusIsError;
     private boolean busy;
 
-    private PlayerSkinWidget previewWidget;
+    private CapeAwarePlayerWidget previewWidget;
     /** Mutable holder so the preview widget's Supplier can see live updates without recreating it. */
     private PlayerSkin previewSkin;
     /** Local-only overlay (not yet applied to the account) shown on top of currentSkin() in the
@@ -121,8 +120,8 @@ public class DressingRoomScreen extends Screen {
 
         previewSkin = currentSkin();
         Supplier<PlayerSkin> skinSupplier = () -> previewSkin.with(pendingPreview);
-        previewWidget = new PlayerSkinWidget(PREVIEW_W, PANEL_H - PAD * 2 - TAB_H - 30,
-                Minecraft.getInstance().getEntityModels(), skinSupplier);
+        previewWidget = new CapeAwarePlayerWidget(PREVIEW_W, PANEL_H - PAD * 2 - TAB_H - 30,
+                skinSupplier, () -> tab == Tab.CAPE);
         previewWidget.setPosition(px + PAD, py + PAD + TAB_H + 30);
         addRenderableWidget(previewWidget);
 
