@@ -82,11 +82,18 @@ public class SkinEditorScreen extends Screen {
     }
 
     private int panelWidth() {
-        return Math.max(canvasWidthPx() + PAD * 2, 260);
+        // Hard-clamped to the actual window size (minus a margin) no matter what the canvas
+        // measures out to - a screen-sized panel with its Close button pushed off past the
+        // bottom edge is exactly what made this unusable before, so this is a second, independent
+        // safety net on top of fitPixelSize() rather than trusting that calculation alone.
+        int max = Math.max(260, width - 40);
+        return Math.min(Math.max(canvasWidthPx() + PAD * 2, 260), max);
     }
 
     private int panelHeight() {
-        return HEADER_H + canvasHeightPx() + GAP_ABOVE_BUTTONS + BUTTON_ROW_H + PAD * 2;
+        int max = Math.max(160, height - 40);
+        int wanted = HEADER_H + canvasHeightPx() + GAP_ABOVE_BUTTONS + BUTTON_ROW_H + PAD * 2;
+        return Math.min(wanted, max);
     }
 
     private int panelX() {
@@ -106,10 +113,13 @@ public class SkinEditorScreen extends Screen {
     }
 
     /** Picks the largest pixel size that keeps the whole skin on screen, so a taller/odd-shaped
-     *  skin texture never forces the panel past the window edge. */
+     *  skin texture never forces the panel past the window edge. Also caps against the actual
+     *  window size, not just the fixed span, since a small window could still be narrower than
+     *  MAX_CANVAS_SPAN. */
     private void fitPixelSize(int skinW, int skinH) {
         int longest = Math.max(skinW, skinH);
-        int size = MAX_CANVAS_SPAN / Math.max(1, longest);
+        int span = Math.min(MAX_CANVAS_SPAN, Math.min(width, height) - 80);
+        int size = span / Math.max(1, longest);
         this.pixelSize = Math.max(MIN_PIXEL_SIZE, Math.min(MAX_PIXEL_SIZE, size));
     }
 
@@ -157,9 +167,10 @@ public class SkinEditorScreen extends Screen {
             skinPixels = fromDisk;
             status = "Loaded your current skin. Use \"Load Skin PNG...\" to paint a different file instead.";
         } else {
-            // Couldn't resolve the account's cached skin file (e.g. offline-mode account with no
-            // cache entry yet) - fall back to a blank canvas rather than crashing, and tell the
-            // player explicitly instead of silently showing an empty grid.
+            // Couldn't resolve the account's cached skin file (offline-mode account, a built-in
+            // Steve/Alex default with no cache entry, a cache layout this couldn't safely
+            // confirm, ...) - fall back to a blank canvas rather than guessing, and tell the
+            // player explicitly instead of silently showing an empty or garbled grid.
             skinPixels = new NativeImage(64, 64, true);
             status = "Could not find your cached skin file - click \"Load Skin PNG...\" to load one.";
         }
@@ -175,12 +186,28 @@ public class SkinEditorScreen extends Screen {
      * skin to {@code <gameDirectory>/skins/<hash prefix>/<hash>} and registers it under the
      * identifier {@code minecraft:skins/<hash>}, so that same relative path re-read from disk is
      * the account's real, current skin PNG.
+     * <p>
+     * This only trusts the result if BOTH of the following hold, since a wrong guess here
+     * previously produced a screen-sized "skin" (whatever unrelated file happened to exist at a
+     * miscomputed path) that made the whole editor unusable rather than just empty:
+     * <ul>
+     *   <li>the texture's identifier path actually looks like {@code skins/<hash>} - a built-in
+     *       default skin (Steve/Alex) or any other non-downloaded texture uses a different path
+     *       shape entirely and must not be treated as a cache hash;</li>
+     *   <li>the decoded image is exactly 64 wide with a height of 32 or 64 - the only two valid
+     *       Minecraft skin layouts. Anything else (a corrupt read, a hash collision with some
+     *       unrelated cached file) is rejected rather than drawn.</li>
+     * </ul>
      */
     private static NativeImage readSkinFromDiskCache(PlayerSkin skin) {
+        NativeImage image = null;
         try {
-            String path = skin.body().texturePath().getPath(); // "skins/<hash>"
-            String hash = path.substring(path.lastIndexOf('/') + 1);
-            if (hash.isEmpty()) {
+            String path = skin.body().texturePath().getPath();
+            if (path == null || !path.startsWith("skins/")) {
+                return null;
+            }
+            String hash = path.substring("skins/".length());
+            if (hash.isEmpty() || hash.indexOf('/') >= 0) {
                 return null;
             }
             String prefix = hash.length() > 2 ? hash.substring(0, 2) : "xx";
@@ -190,9 +217,20 @@ public class SkinEditorScreen extends Screen {
                 return null;
             }
             try (InputStream in = Files.newInputStream(file)) {
-                return NativeImage.read(in);
+                image = NativeImage.read(in);
             }
+            boolean validLayout = image.getWidth() == 64 && (image.getHeight() == 64 || image.getHeight() == 32);
+            if (!validLayout) {
+                MinimalClientMod.LOGGER.warn("Dressing room: cached skin file at {} had unexpected size {}x{}, ignoring",
+                        file, image.getWidth(), image.getHeight());
+                image.close();
+                return null;
+            }
+            return image;
         } catch (IOException | RuntimeException e) {
+            if (image != null) {
+                image.close();
+            }
             MinimalClientMod.LOGGER.warn("Dressing room: could not read cached skin PNG from disk", e);
             return null;
         }
