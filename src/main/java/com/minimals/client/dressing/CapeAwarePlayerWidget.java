@@ -15,7 +15,6 @@ import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.network.chat.CommonComponents;
-import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.PlayerSkin;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Quaternionf;
@@ -45,11 +44,12 @@ import java.util.function.Supplier;
  * preview pipeline. Because of that mirror, the "face the camera" base orientation vanilla uses
  * is a 180-degree roll around Z ({@code rotateZ(PI)}) on the {@code rotation} quaternion, paired
  * with {@code bodyRot = 180} set directly on the entity render state - NOT a Y-axis yaw baked
- * into the quaternion. Turning the model left/right and up/down is likewise done the vanilla way:
- * by driving the entity's own {@code bodyRot}/{@code yRot} (yaw) and {@code xRot} (pitch) fields,
- * not by composing extra quaternions on top of the Z-roll base. The pitch quaternion is also
- * reused as {@code overrideCameraAngle}, exactly as vanilla does, so the lighting/camera framing
- * follows the same tilt as the model.
+ * into the quaternion. Turning the model is done the vanilla way: by driving the entity's own
+ * {@code bodyRot}/{@code yRot} (yaw) field, not by composing extra quaternions on top of the
+ * Z-roll base. Dragging is locked to that single horizontal axis - {@code dragPitch} stays fixed
+ * at {@link #DEFAULT_PITCH} and is never touched by {@link #onDrag}; it only exists so the pitch
+ * quaternion (reused as {@code overrideCameraAngle}, exactly as vanilla does) gives the mannequin
+ * its fixed slight downward camera tilt instead of a flat head-on angle.
  */
 public class CapeAwarePlayerWidget extends AbstractWidget {
 
@@ -58,7 +58,6 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
     private static final float ROTATION_SENSITIVITY = 1.0F;
     private static final float DEFAULT_YAW = 0.0F;
     private static final float DEFAULT_PITCH = 8.0F;
-    private static final float PITCH_LIMIT = 50.0F;
 
     private final Supplier<PlayerSkin> skin;
     /** When true, the model faces away from the camera (back visible) so a cape shows clearly. */
@@ -161,8 +160,12 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
 
     @Override
     protected void onDrag(MouseButtonEvent event, double dx, double dy) {
-        this.dragYaw += (float) dx * ROTATION_SENSITIVITY;
-        this.dragPitch = Mth.clamp(this.dragPitch - (float) dy * ROTATION_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
+        // Locked to the horizontal axis only: dragging up/down does nothing, dragPitch stays at
+        // its default. Sign is negated versus a naive "add dx" because rotationSensitivity here
+        // turns the entity itself (bodyRot/yRot), not the camera - dragging right must turn the
+        // model's right side toward the camera, which is a negative yaw step in this pipeline's
+        // mirrored-Z coordinate space (see class javadoc).
+        this.dragYaw -= (float) dx * ROTATION_SENSITIVITY;
     }
 
     @Override
