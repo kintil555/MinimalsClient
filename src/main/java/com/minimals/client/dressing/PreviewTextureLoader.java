@@ -43,6 +43,15 @@ final class PreviewTextureLoader {
                 .resolve(suffix + "_" + COUNTER.incrementAndGet() + ".png");
     }
 
+    /** Downloads+registers a cape texture and returns just its Identifier, for drawing a small
+     *  thumbnail on a card (as opposed to {@link #previewCape}, which wraps it in a full-body
+     *  preview Patch for the 3D player widget). */
+    static java.util.concurrent.CompletableFuture<Identifier> registerCapeThumbnail(String textureUrl) {
+        Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/cape_thumb_" + COUNTER.incrementAndGet());
+        return downloader().downloadAndRegisterSkin(id, cacheFile("cape_thumb"), textureUrl, false)
+                .thenApply(ClientAsset.Texture::texturePath);
+    }
+
     /** Registers {@code textureUrl} under a fresh id and resolves to a Patch swapping just the
      *  cape slot, so callers can do {@code base.with(patch)} for an instant preview skin. */
     static CompletableFuture<PlayerSkin.Patch> previewCape(String textureUrl) {

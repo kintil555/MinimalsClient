@@ -76,7 +76,7 @@ public class DressingRoomScreen extends Screen {
     // Cape tab: dropdown of capes already unlocked on this account (Mojang has no "upload a
     // cape" endpoint - only activating one already granted to the account). Choosing one only
     // previews it (pendingPreview / pendingCape) until Apply is pressed.
-    private DropdownWidget capeDropdown;
+    private CapeCardList capeCardList;
     private List<MojangSkinService.Cape> ownedCapes = List.of();
     private boolean capesLoaded;
     private MojangSkinService.Cape pendingCape;
@@ -425,24 +425,23 @@ public class DressingRoomScreen extends Screen {
             }));
         }
 
-        List<String> names = new ArrayList<>();
-        names.add("(No cape)");
-        for (var cape : ownedCapes) {
-            names.add(cape.name());
-        }
-        capeDropdown = track(new DropdownWidget(x, y, w,
-                ownedCapes.isEmpty() ? "No capes unlocked" : "Choose a cape...", names, this::onCapeChosen));
-        String current = pendingCapeIsNone ? "(No cape)"
-                : pendingCape != null ? pendingCape.name()
+        boolean anyActive = ownedCapes.stream().anyMatch(MojangSkinService.Cape::active);
+        List<CapeCardList.Entry> cardEntries = ownedCapes.stream()
+                .map(c -> new CapeCardList.Entry(c.id(), c.name(), c.url(), c.active()))
+                .toList();
+        capeCardList = new CapeCardList(x, y, w, this::onCapeCardPicked);
+        capeCardList.setEntries(cardEntries, anyActive);
+        capeCardList.setSelected(pendingCapeIsNone ? null
+                : pendingCape != null ? pendingCape.id()
                 : ownedCapes.stream().filter(MojangSkinService.Cape::active)
-                        .map(MojangSkinService.Cape::name).findFirst().orElse("(No cape)");
-        capeDropdown.setSelected(current);
+                        .map(MojangSkinService.Cape::id).findFirst().orElse(null));
+        addRenderableWidget(capeCardList);
 
-        int belowY = y + 24;
-        boolean activeName = ownedCapes.stream().filter(MojangSkinService.Cape::active)
-                .map(MojangSkinService.Cape::name).findFirst().orElse("(No cape)").equals(current);
+        int belowY = y + capeCardList.getHeight() + 6;
         boolean changed = pendingCapeIsNone || pendingCape != null;
-        if (changed && !activeName) {
+        boolean isActiveAlready = pendingCapeIsNone ? !anyActive
+                : pendingCape != null && pendingCape.active();
+        if (changed && !isActiveAlready) {
             addRenderableWidget(Button.builder(Component.literal("Apply cape"), btn -> applyPendingCape())
                     .bounds(x, belowY, w - 56, 20)
                     .build());
@@ -457,27 +456,26 @@ public class DressingRoomScreen extends Screen {
                 .build()).active = false;
     }
 
-    private void onCapeChosen(String name) {
-        if ("(No cape)".equals(name)) {
+    private void onCapeCardPicked(CapeCardList.Entry entry) {
+        if (entry.id() == null) {
             pendingCapeIsNone = true;
             pendingCape = null;
             pendingPreview = PlayerSkin.Patch.EMPTY;
             rebuildWidgets();
             return;
         }
-        ownedCapes.stream().filter(c -> c.name().equals(name)).findFirst().ifPresent(c -> {
-            pendingCapeIsNone = false;
-            pendingCape = c;
-            if (c.url() != null) {
-                PreviewTextureLoader.previewCape(c.url()).thenAccept(patch ->
-                        Minecraft.getInstance().execute(() -> {
-                            if (pendingCape == c) {
-                                pendingPreview = patch;
-                            }
-                        }));
-            }
-            rebuildWidgets();
-        });
+        pendingCapeIsNone = false;
+        pendingCape = ownedCapes.stream().filter(c -> c.id().equals(entry.id())).findFirst().orElse(null);
+        MojangSkinService.Cape chosen = pendingCape;
+        if (chosen != null && chosen.url() != null) {
+            PreviewTextureLoader.previewCape(chosen.url()).thenAccept(patch ->
+                    Minecraft.getInstance().execute(() -> {
+                        if (pendingCape == chosen) {
+                            pendingPreview = patch;
+                        }
+                    }));
+        }
+        rebuildWidgets();
     }
 
     private void cancelPendingCape() {
