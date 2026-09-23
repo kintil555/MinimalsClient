@@ -71,9 +71,14 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
 
         boolean back = Boolean.TRUE.equals(this.showBack.get());
 
+        // Spin the model itself 180 degrees (its own body/head yaw, the same fields the game
+        // uses for normal entity facing) rather than folding the flip into the camera-facing
+        // quaternion below - much less error-prone than reasoning about quaternion composition
+        // order, and it's exactly what these fields are for.
+        float extraYaw = back ? 180.0F : 0.0F;
         if (renderState instanceof LivingEntityRenderState livingState) {
-            livingState.bodyRot = 0.0F;
-            livingState.yRot = 0.0F;
+            livingState.bodyRot = extraYaw;
+            livingState.yRot = extraYaw;
             livingState.xRot = 0.0F;
             livingState.boundingBoxWidth = livingState.boundingBoxWidth / livingState.scale;
             livingState.boundingBoxHeight = livingState.boundingBoxHeight / livingState.scale;
@@ -81,14 +86,10 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         }
 
         // Base orientation matches vanilla's inventory-preview convention (Z-flip puts the
-        // model face-on to the camera); an extra 180 degree yaw spins it around so the back
-        // - and any cape - faces the camera instead.
+        // model face-on to the camera); drag-to-rotate is layered on top.
         Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
-        if (back) {
-            rotation.mul(new Quaternionf().rotateY((float) Math.PI));
-        }
         rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
-        rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0) * (back ? -1.0F : 1.0F)));
+        rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0)));
 
         float scale = 0.97F * this.getHeight() / 2.125F;
         Vector3f translation = new Vector3f(0.0F, renderState.boundingBoxHeight / 2.0F - 1.0625F, 0.0F);
