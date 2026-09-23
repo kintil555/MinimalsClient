@@ -10,12 +10,14 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.world.item.ItemStack;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.jspecify.annotations.Nullable;
@@ -31,10 +33,15 @@ import java.util.function.Supplier;
  * to preview a cape. This widget instead builds a real {@link AvatarRenderState} off the local
  * player (the same path vanilla's inventory screen uses to show the player holding items) and
  * overrides its {@code skin} field with the supplied preview skin, so the full layered player
- * renderer (body + cape + elytra) draws through {@link GuiGraphicsExtractor#entity}.
+ * renderer (body + cape + elytra) draws through {@link GuiGraphicsExtractor#entity}. The
+ * snapshot is then stripped down to a bare idle pose (no held item, no armor, no swing/use
+ * animation) so it reads as a clean dressing-room mannequin instead of whatever the player is
+ * actually doing in the world right now.
  */
 public class CapeAwarePlayerWidget extends AbstractWidget {
 
+    private static final float MODEL_HEIGHT = 2.125F;
+    private static final float FIT_SCALE = 0.97F;
     private static final float ROTATION_SENSITIVITY = 2.5F;
     private static final float DEFAULT_ROTATION_X = -5.0F;
     private static final float DEFAULT_ROTATION_Y = 30.0F;
@@ -69,30 +76,52 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
             avatarState.skin = this.skin.get();
         }
 
+        // Strip this down to a bare idle mannequin: no held item, no armor, no swing/use
+        // animation, no crouch/swim/fall-flying pose. This is a preview of the skin/cape, not a
+        // live mirror of whatever the player happens to be doing or holding right now.
+        if (renderState instanceof ArmedEntityRenderState armedState) {
+            armedState.rightHandItemStack = ItemStack.EMPTY;
+            armedState.leftHandItemStack = ItemStack.EMPTY;
+            armedState.rightHandItemState.clear();
+            armedState.leftHandItemState.clear();
+            armedState.attackTime = 0.0F;
+        }
+        if (renderState instanceof net.minecraft.client.renderer.entity.state.HumanoidRenderState humanoidState) {
+            humanoidState.headEquipment = ItemStack.EMPTY;
+            humanoidState.chestEquipment = ItemStack.EMPTY;
+            humanoidState.legsEquipment = ItemStack.EMPTY;
+            humanoidState.feetEquipment = ItemStack.EMPTY;
+            humanoidState.isUsingItem = false;
+            humanoidState.isFallFlying = false;
+            humanoidState.isVisuallySwimming = false;
+            humanoidState.isCrouching = false;
+            humanoidState.isPassenger = false;
+            humanoidState.swimAmount = 0.0F;
+        }
+
         boolean back = Boolean.TRUE.equals(this.showBack.get());
 
-        // Spin the model itself 180 degrees (its own body/head yaw, the same fields the game
-        // uses for normal entity facing) rather than folding the flip into the camera-facing
-        // quaternion below - much less error-prone than reasoning about quaternion composition
-        // order, and it's exactly what these fields are for.
-        float extraYaw = back ? 180.0F : 0.0F;
         if (renderState instanceof LivingEntityRenderState livingState) {
-            livingState.bodyRot = extraYaw;
-            livingState.yRot = extraYaw;
+            livingState.bodyRot = back ? 180.0F : 0.0F;
+            livingState.yRot = back ? 180.0F : 0.0F;
             livingState.xRot = 0.0F;
             livingState.boundingBoxWidth = livingState.boundingBoxWidth / livingState.scale;
             livingState.boundingBoxHeight = livingState.boundingBoxHeight / livingState.scale;
             livingState.scale = 1.0F;
         }
 
-        // Base orientation matches vanilla's inventory-preview convention (Z-flip puts the
-        // model face-on to the camera); drag-to-rotate is layered on top.
+        // Same base convention as vanilla's inventory player preview (a Z-flip puts the model
+        // face-on to the camera); the widget's own drag-to-rotate is layered on top exactly like
+        // vanilla PlayerSkinWidget's rotationX/rotationY.
         Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
         rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
         rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0)));
 
-        float scale = 0.97F * this.getHeight() / 2.125F;
-        Vector3f translation = new Vector3f(0.0F, renderState.boundingBoxHeight / 2.0F - 1.0625F, 0.0F);
+        float scale = FIT_SCALE * this.getHeight() / MODEL_HEIGHT;
+        // Same translation vanilla's inventory screen uses: half the model's own bounding-box
+        // height, plus a small constant nudge - NOT the unrelated pivotY constant from the
+        // body-only skin() pipeline, which does not apply to this entity() pipeline at all.
+        Vector3f translation = new Vector3f(0.0F, renderState.boundingBoxHeight / 2.0F + 0.0625F, 0.0F);
 
         graphics.entity(renderState, scale, translation, rotation, null,
                 this.getX(), this.getY(), this.getRight(), this.getBottom());
@@ -117,3 +146,4 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         return null;
     }
 }
+
