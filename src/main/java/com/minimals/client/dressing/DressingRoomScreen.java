@@ -133,7 +133,8 @@ public class DressingRoomScreen extends Screen {
     }
 
     private Button tabButton(String label, Tab target, int x, int y, int w) {
-        return Button.builder(Component.literal(label), btn -> {
+        boolean active = tab == target;
+        Button button = Button.builder(Component.literal(label), btn -> {
                     if (tab != target) {
                         tab = target;
                         status = "";
@@ -142,6 +143,45 @@ public class DressingRoomScreen extends Screen {
                 })
                 .bounds(x, y, w, TAB_H)
                 .build();
+        return new TabPillButton(button, active);
+    }
+
+    /**
+     * Wraps a vanilla Button with an Essential-style pill: flat rows read as dull vanilla UI, so
+     * the active tab gets a filled accent pill + glow underline and inactive tabs get a soft
+     * hover tint instead of the stock 3-slice button texture. Delegates everything else to the
+     * wrapped button so click handling/state stay untouched.
+     */
+    private static final class TabPillButton extends Button {
+        private final Button delegate;
+        private final boolean active;
+
+        TabPillButton(Button delegate, boolean active) {
+            super(delegate.getX(), delegate.getY(), delegate.getWidth(), delegate.getHeight(),
+                    delegate.getMessage(), b -> delegate.onPress(), DEFAULT_NARRATION);
+            this.delegate = delegate;
+            this.active = active;
+        }
+
+        @Override
+        public void onPress(net.minecraft.client.input.InputWithModifiers input) {
+            delegate.onPress(input);
+        }
+
+        @Override
+        protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+            boolean hovered = isHoveredOrFocused();
+            int bg = active ? UiRenderer.ACCENT
+                    : hovered ? UiRenderer.HEADER_BTN_BG_HOVER : UiRenderer.HEADER_BTN_BG;
+            UiRenderer.roundedRect(graphics, getX(), getY(), getX() + getWidth(), getY() + getHeight(), 6, bg);
+            if (active) {
+                UiRenderer.roundedRect(graphics, getX() + 4, getY() + getHeight() - 2,
+                        getX() + getWidth() - 4, getY() + getHeight(), 1, 0xFFFFFFFF);
+            }
+            int color = active ? 0xFFFFFFFF : UiRenderer.TEXT_SECONDARY;
+            UiRenderer.centeredText(graphics, getMessage().getString(),
+                    getX() + getWidth() / 2, getY() + (getHeight() - 8) / 2, color);
+        }
     }
 
     private <T extends DropdownWidget> T track(T dropdown) {
@@ -612,12 +652,18 @@ public class DressingRoomScreen extends Screen {
         int px = panelX();
         int py = panelY();
         UiRenderer.roundedRect(graphics, px, py, px + PANEL_W, py + PANEL_H, PANEL_RADIUS, UiRenderer.PANEL_BG);
+        // Thin accent bar under the title, Essential-style, instead of plain flat text.
+        UiRenderer.roundedRect(graphics, px + PAD, py + PAD + 13, px + PAD + 28, py + PAD + 15, 1, UiRenderer.ACCENT);
         UiRenderer.text(graphics, "Dressing Room", px + PAD, py + PAD, UiRenderer.TEXT_PRIMARY);
-        UiRenderer.text(graphics, MojangSkinService.isLoggedIn() ? "Signed in" : "Offline - sign in to change skin/cape",
-                px + PAD, py + PAD + 12, MojangSkinService.isLoggedIn() ? UiRenderer.TEXT_SECONDARY : 0xFFE0A030);
+        boolean loggedIn = MojangSkinService.isLoggedIn();
+        String badge = loggedIn ? "● Signed in" : "● Offline - sign in to change skin/cape";
+        UiRenderer.text(graphics, badge, px + PAD, py + PAD + 12, loggedIn ? 0xFF7CD87C : 0xFFE0A030);
 
         UiRenderer.roundedRect(graphics, px + PAD, py + PAD + TAB_H + 26, px + PAD + PREVIEW_W,
                 py + PANEL_H - PAD, 6, UiRenderer.SETTINGS_PANEL_BG);
+        // 1px accent-tinted rim so the preview frame doesn't read as a flat grey box.
+        UiRenderer.roundedRect(graphics, px + PAD, py + PAD + TAB_H + 26, px + PAD + PREVIEW_W,
+                py + PAD + TAB_H + 27, 0, 0x338B5CF6);
 
         super.extractRenderState(graphics, mouseX, mouseY, delta);
 
@@ -630,8 +676,12 @@ public class DressingRoomScreen extends Screen {
 
         if (!status.isEmpty()) {
             int contentX = px + PAD + PREVIEW_W + PAD;
-            UiRenderer.text(graphics, status, contentX, py + PANEL_H - PAD - 12,
-                    statusIsError ? 0xFFFF5555 : 0xFF7CD87C);
+            int color = statusIsError ? 0xFFFF5555 : 0xFF7CD87C;
+            int sy = py + PANEL_H - PAD - 14;
+            int sw = UiRenderer.font().width(status) + 12;
+            UiRenderer.roundedRect(graphics, contentX - 4, sy - 2, contentX + sw, sy + 10, 4,
+                    statusIsError ? 0x26FF5555 : 0x267CD87C);
+            UiRenderer.text(graphics, status, contentX, sy, color);
         }
     }
 }

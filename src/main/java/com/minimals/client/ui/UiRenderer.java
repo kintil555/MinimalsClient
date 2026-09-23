@@ -182,6 +182,11 @@ public final class UiRenderer {
     }
 
     /** Draws ClickGUI text with the selected font; alpha follows the opacity setting. */
+    public static void centeredText(GuiGraphicsExtractor graphics, String text, int centerX, int y, int argb) {
+        int w = font().width(text);
+        text(graphics, text, centerX - w / 2, y, argb);
+    }
+
     public static void text(GuiGraphicsExtractor graphics, String text, int x, int y, int argb) {
         graphics.text(font(), styled(text), x, y, withOpacity(argb), false);
     }
