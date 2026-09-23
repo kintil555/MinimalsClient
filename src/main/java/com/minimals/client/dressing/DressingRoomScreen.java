@@ -81,6 +81,9 @@ public class DressingRoomScreen extends Screen {
     private boolean capesLoaded;
     private MojangSkinService.Cape pendingCape;
     private boolean pendingCapeIsNone;
+    /** Apply/Cancel/cooldown buttons currently laid out below the cape card grid, so they can be
+     *  refreshed without rebuildWidgets() (which would reset the card grid's scroll). */
+    private final List<Button> capeActionWidgets = new ArrayList<>();
 
     // Presets tab: apply/delete a saved bundle; "Save current as preset" captures whatever the
     // account is wearing right now (skin left unset unless it came from the Library, since a
@@ -416,73 +419,122 @@ public class DressingRoomScreen extends Screen {
 
     // ---- Cape tab --------------------------------------------------------------------------
 
+    // Fixed slot for the Apply/Cancel row so it never shifts the cooldown label below it,
+    // regardless of whether it's currently shown - avoids the row/whole tab jumping around.
+    private static final int CAPE_ACTION_ROW_H = 24;
+
     private void initCapeTab(int x, int y, int w) {
         if (!capesLoaded && MojangSkinService.isLoggedIn()) {
             capesLoaded = true; // guard against re-triggering the fetch on every rebuildWidgets()
             MojangSkinService.fetchOwnCapes().thenAccept(capes -> Minecraft.getInstance().execute(() -> {
                 ownedCapes = capes;
+                if (capeCardList != null) {
+                    capeCardList.setEntries(toCardEntries(), anyCapeActive());
+                }
                 rebuildWidgets();
             }));
         }
 
-        boolean anyActive = ownedCapes.stream().anyMatch(MojangSkinService.Cape::active);
-        List<CapeCardList.Entry> cardEntries = ownedCapes.stream()
-                .map(c -> new CapeCardList.Entry(c.id(), c.name(), c.url(), c.active()))
-                .toList();
         capeCardList = new CapeCardList(x, y, w, this::onCapeCardPicked);
-        capeCardList.setEntries(cardEntries, anyActive);
-        capeCardList.setSelected(pendingCapeIsNone ? null
-                : pendingCape != null ? pendingCape.id()
-                : ownedCapes.stream().filter(MojangSkinService.Cape::active)
-                        .map(MojangSkinService.Cape::id).findFirst().orElse(null));
+        capeCardList.setEntries(toCardEntries(), anyCapeActive());
+        capeCardList.setSelected(currentCapeSelection());
         addRenderableWidget(capeCardList);
 
-        int belowY = y + capeCardList.getHeight() + 6;
-        boolean changed = pendingCapeIsNone || pendingCape != null;
-        boolean isActiveAlready = pendingCapeIsNone ? !anyActive
-                : pendingCape != null && pendingCape.active();
-        if (changed && !isActiveAlready) {
-            addRenderableWidget(Button.builder(Component.literal("Apply cape"), btn -> applyPendingCape())
-                    .bounds(x, belowY, w - 56, 20)
-                    .build());
-            addRenderableWidget(Button.builder(Component.literal("Cancel"), btn -> cancelPendingCape())
-                    .bounds(x + w - 52, belowY, 52, 20)
-                    .build());
-            belowY += 24;
-        }
-
-        addRenderableWidget(Button.builder(Component.literal(cooldownLabel()), btn -> {})
-                .bounds(x, belowY, w, 16)
-                .build()).active = false;
+        capeActionWidgets.clear();
+        refreshCapeActionRow();
     }
 
+    private List<CapeCardList.Entry> toCardEntries() {
+        return ownedCapes.stream()
+                .map(c -> new CapeCardList.Entry(c.id(), c.name(), c.url(), c.active()))
+                .toList();
+    }
+
+    private boolean anyCapeActive() {
+        return ownedCapes.stream().anyMatch(MojangSkinService.Cape::active);
+    }
+
+    private String currentCapeSelection() {
+        return pendingCapeIsNone ? null
+                : pendingCape != null ? pendingCape.id()
+                : ownedCapes.stream().filter(MojangSkinService.Cape::active)
+                        .map(MojangSkinService.Cape::id).findFirst().orElse(null);
+    }
+
+    private boolean capeSelectionChanged() {
+        return pendingCapeIsNone || pendingCape != null;
+    }
+
+    private boolean isCapeSelectionActiveAlready() {
+        return pendingCapeIsNone ? !anyCapeActive() : pendingCape != null && pendingCape.active();
+    }
+
+    /**
+     * Applies the pick locally (updates preview + Apply/Cancel visibility) without rebuilding the
+     * whole tab from scratch, so the card grid's scroll position is preserved even when the user
+     * picks a card that had scrolled out of the first row.
+     */
     private void onCapeCardPicked(CapeCardList.Entry entry) {
         if (entry.id() == null) {
             pendingCapeIsNone = true;
             pendingCape = null;
             pendingPreview = PlayerSkin.Patch.EMPTY;
-            rebuildWidgets();
-            return;
+        } else {
+            pendingCapeIsNone = false;
+            pendingCape = ownedCapes.stream().filter(c -> c.id().equals(entry.id())).findFirst().orElse(null);
+            MojangSkinService.Cape chosen = pendingCape;
+            if (chosen != null && chosen.url() != null) {
+                PreviewTextureLoader.previewCape(chosen.url()).thenAccept(patch ->
+                        Minecraft.getInstance().execute(() -> {
+                            if (pendingCape == chosen) {
+                                pendingPreview = patch;
+                            }
+                        }));
+            }
         }
-        pendingCapeIsNone = false;
-        pendingCape = ownedCapes.stream().filter(c -> c.id().equals(entry.id())).findFirst().orElse(null);
-        MojangSkinService.Cape chosen = pendingCape;
-        if (chosen != null && chosen.url() != null) {
-            PreviewTextureLoader.previewCape(chosen.url()).thenAccept(patch ->
-                    Minecraft.getInstance().execute(() -> {
-                        if (pendingCape == chosen) {
-                            pendingPreview = patch;
-                        }
-                    }));
-        }
-        rebuildWidgets();
+        capeCardList.setSelected(currentCapeSelection());
+        refreshCapeActionRow();
     }
 
     private void cancelPendingCape() {
         pendingCape = null;
         pendingCapeIsNone = false;
         pendingPreview = PlayerSkin.Patch.EMPTY;
-        rebuildWidgets();
+        capeCardList.setSelected(currentCapeSelection());
+        refreshCapeActionRow();
+    }
+
+    /**
+     * Re-lays-out only the Apply/Cancel/cooldown row below the card grid instead of calling
+     * rebuildWidgets(), which would recreate the CapeCardList and reset its scroll to the top.
+     */
+    private void refreshCapeActionRow() {
+        int tabX = panelX() + PAD + PREVIEW_W + PAD;
+        int contentW = PANEL_W - PAD * 2 - PREVIEW_W - PAD;
+        capeActionWidgets.forEach(this::removeWidget);
+        capeActionWidgets.clear();
+
+        int belowY = capeCardList.getY() + capeCardList.getHeight() + 6;
+        if (capeSelectionChanged() && !isCapeSelectionActiveAlready()) {
+            Button apply = Button.builder(Component.literal("Apply cape"), btn -> applyPendingCape())
+                    .bounds(tabX, belowY, contentW - 56, 20)
+                    .build();
+            Button cancel = Button.builder(Component.literal("Cancel"), btn -> cancelPendingCape())
+                    .bounds(tabX + contentW - 52, belowY, 52, 20)
+                    .build();
+            addRenderableWidget(apply);
+            addRenderableWidget(cancel);
+            capeActionWidgets.add(apply);
+            capeActionWidgets.add(cancel);
+        }
+        belowY += CAPE_ACTION_ROW_H;
+
+        Button cooldown = Button.builder(Component.literal(cooldownLabel()), btn -> {})
+                .bounds(tabX, belowY, contentW, 16)
+                .build();
+        cooldown.active = false;
+        addRenderableWidget(cooldown);
+        capeActionWidgets.add(cooldown);
     }
 
     private void applyPendingCape() {
