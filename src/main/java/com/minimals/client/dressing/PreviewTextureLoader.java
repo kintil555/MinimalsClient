@@ -36,27 +36,33 @@ final class PreviewTextureLoader {
     }
 
     /** Per-texture scratch cache file: downloadAndRegisterSkin requires a real path (it checks
-     *  Files.isRegularFile on it) and reuses it as an on-disk cache on repeat calls. */
-    private static Path cacheFile(String suffix) {
+     *  Files.isRegularFile on it) and reuses it as an on-disk cache on repeat calls. Takes the
+     *  same counter value used for the Identifier so id and cache file always pair up 1:1, even
+     *  when multiple downloads are in flight at once. */
+    private static Path cacheFile(String suffix, int n) {
         return Minecraft.getInstance().gameDirectory.toPath()
                 .resolve("minimals").resolve("preview-cache")
-                .resolve(suffix + "_" + COUNTER.incrementAndGet() + ".png");
+                .resolve(suffix + "_" + n + ".png");
     }
 
     /** Downloads+registers a cape texture and returns just its Identifier, for drawing a small
      *  thumbnail on a card (as opposed to {@link #previewCape}, which wraps it in a full-body
-     *  preview Patch for the 3D player widget). */
+     *  preview Patch for the 3D player widget). Each call gets its own unique id/cache file so
+     *  concurrent thumbnail loads (multiple cards lazily loading at once) never share or
+     *  overwrite one another's registered texture. */
     static java.util.concurrent.CompletableFuture<Identifier> registerCapeThumbnail(String textureUrl) {
-        Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/cape_thumb_" + COUNTER.incrementAndGet());
-        return downloader().downloadAndRegisterSkin(id, cacheFile("cape_thumb"), textureUrl, false)
+        int n = COUNTER.incrementAndGet();
+        Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/cape_thumb_" + n);
+        return downloader().downloadAndRegisterSkin(id, cacheFile("cape_thumb", n), textureUrl, false)
                 .thenApply(ClientAsset.Texture::texturePath);
     }
 
     /** Registers {@code textureUrl} under a fresh id and resolves to a Patch swapping just the
      *  cape slot, so callers can do {@code base.with(patch)} for an instant preview skin. */
     static CompletableFuture<PlayerSkin.Patch> previewCape(String textureUrl) {
-        Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/cape_" + COUNTER.get());
-        return downloader().downloadAndRegisterSkin(id, cacheFile("cape"), textureUrl, false)
+        int n = COUNTER.incrementAndGet();
+        Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/cape_" + n);
+        return downloader().downloadAndRegisterSkin(id, cacheFile("cape", n), textureUrl, false)
                 .thenApply(texture -> PlayerSkin.Patch.create(
                         Optional.empty(),
                         Optional.of(new ClientAsset.ResourceTexture(texture.texturePath())),
@@ -67,8 +73,9 @@ final class PreviewTextureLoader {
     /** Same as {@link #previewCape} but for the body (skin) slot, also carrying the model type
      *  so slim/classic arms preview correctly. */
     static CompletableFuture<PlayerSkin.Patch> previewSkin(String textureUrl, PlayerModelType model) {
-        Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/skin_" + COUNTER.get());
-        return downloader().downloadAndRegisterSkin(id, cacheFile("skin"), textureUrl, false)
+        int n = COUNTER.incrementAndGet();
+        Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/skin_" + n);
+        return downloader().downloadAndRegisterSkin(id, cacheFile("skin", n), textureUrl, false)
                 .thenApply(texture -> PlayerSkin.Patch.create(
                         Optional.of(new ClientAsset.ResourceTexture(texture.texturePath())),
                         Optional.empty(),
