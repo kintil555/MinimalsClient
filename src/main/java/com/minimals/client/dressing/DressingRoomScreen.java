@@ -79,6 +79,9 @@ public class DressingRoomScreen extends Screen {
     private CapeCardList capeCardList;
     private List<MojangSkinService.Cape> ownedCapes = List.of();
     private boolean capesLoaded;
+    /** Guards {@link #loadActiveCapePreviewIfNeeded()} so it only fires once per capesLoaded
+     *  cycle instead of re-downloading the same texture on every rebuildWidgets(). */
+    private boolean activeCapePreviewLoaded;
     private MojangSkinService.Cape pendingCape;
     private boolean pendingCapeIsNone;
     /** Apply/Cancel/cooldown buttons currently laid out below the cape card grid, so they can be
@@ -151,6 +154,7 @@ public class DressingRoomScreen extends Screen {
                         pendingPreview = PlayerSkin.Patch.EMPTY;
                         pendingCape = null;
                         pendingCapeIsNone = false;
+                        activeCapePreviewLoaded = false;
                         rebuildWidgets();
                     }
         });
@@ -431,9 +435,11 @@ public class DressingRoomScreen extends Screen {
                 if (capeCardList != null) {
                     capeCardList.setEntries(toCardEntries(), anyCapeActive());
                 }
+                loadActiveCapePreviewIfNeeded();
                 rebuildWidgets();
             }));
         }
+        loadActiveCapePreviewIfNeeded();
 
         capeCardList = new CapeCardList(x, y, w, this::onCapeCardPicked);
         capeCardList.setEntries(toCardEntries(), anyCapeActive());
@@ -442,6 +448,32 @@ public class DressingRoomScreen extends Screen {
 
         capeActionWidgets.clear();
         refreshCapeActionRow();
+    }
+
+    /**
+     * The account's currently-active cape (from Mojang's profile) isn't necessarily reflected in
+     * {@code currentSkin()} - the client only re-reads a player's full textures on join, so a
+     * cape activated earlier this session (or just fetched from the API) can be "Active" on its
+     * card yet show nothing on the 3D preview. Loads it into pendingPreview so the preview
+     * matches reality, WITHOUT marking it as a pending user choice (no Apply/Cancel shown).
+     */
+    private void loadActiveCapePreviewIfNeeded() {
+        if (activeCapePreviewLoaded || pendingCapeIsNone || pendingCape != null) {
+            return;
+        }
+        MojangSkinService.Cape active = ownedCapes.stream()
+                .filter(MojangSkinService.Cape::active).findFirst().orElse(null);
+        if (active == null || active.url() == null) {
+            return;
+        }
+        activeCapePreviewLoaded = true;
+        PreviewTextureLoader.previewCape(active.url()).thenAccept(patch ->
+                Minecraft.getInstance().execute(() -> {
+                    // Only apply if the user hasn't picked something else in the meantime.
+                    if (pendingCape == null && !pendingCapeIsNone) {
+                        pendingPreview = patch;
+                    }
+                }));
     }
 
     private List<CapeCardList.Entry> toCardEntries() {
@@ -562,6 +594,7 @@ public class DressingRoomScreen extends Screen {
                 pendingCapeIsNone = false;
                 pendingPreview = PlayerSkin.Patch.EMPTY;
                 capesLoaded = false;
+                activeCapePreviewLoaded = false;
                 refreshLocalPreviewBestEffort();
                 rebuildWidgets();
             }
