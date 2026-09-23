@@ -119,28 +119,20 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
             livingState.scale = 1.0F;
         }
 
-        // Base convention: a Z-flip puts the model face-on to the camera (same as vanilla's
-        // inventory player preview). The model's own bodyRot/yRot/xRot are left at 0 (a plain
-        // forward-facing idle pose) always - rotating those instead of the camera made the head,
-        // body and limbs disagree, since head/limb poses in the player model are computed
-        // relative to bodyRot and don't all flip the same way. Facing front vs back is instead
-        // done as a pure camera rotation on top of the Z-flip: an extra 180-degree yaw when the
-        // Cape tab wants the back visible.
+        // Model space here has +Z pointing OUT of the player's chest (vanilla forward), so a
+        // camera sitting on +Z already looks at the front and needs no flip at all for the
+        // default (Skin tab) view. "Back" view is simply an extra 180-degree yaw added to the
+        // baseline yaw before any drag is applied, exactly like turning the mannequin around on
+        // a turntable - not a separate flip/mul step that can fight with drag handedness.
         //
-        // JOML's Quaternionf#mul(q) sets this = this * q. For quaternion-vector rotation
-        // v' = rotation * v, terms compose right-to-left against the vector: the LAST .mul()
-        // call is applied to the vector FIRST, and whatever was set first (via rotateY/rotateZ
-        // before any .mul()) ends up outermost, applied LAST. So drag rotation must be composed
-        // first (innermost/applied-first) and the Z-flip + back-yaw must be appended via .mul()
-        // afterward (outermost/applied-last), or the Z-flip's handedness change corrupts both
-        // the back-yaw direction and the felt drag direction.
+        // Composition order (JOML: this.mul(q) => this*q, applied right-to-left to the vector):
+        // start from baseline+back yaw, then apply the user's drag yaw/pitch on top, so drag
+        // always behaves the same regardless of which tab is open.
+        float baseYaw = back ? 180.0F : 0.0F;
         Quaternionf rotation = new Quaternionf();
-        rotation.rotateY(this.rotationY * (float) (Math.PI / 180.0));
+        rotation.rotateY(baseYaw * (float) (Math.PI / 180.0));
+        rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0)));
         rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
-        if (back) {
-            rotation.mul(new Quaternionf().rotateY((float) Math.PI));
-        }
-        rotation.mul(new Quaternionf().rotateZ((float) Math.PI));
 
         float scale = FIT_SCALE * this.getHeight() / MODEL_HEIGHT;
         // Same translation vanilla's inventory screen uses: half the model's own bounding-box
