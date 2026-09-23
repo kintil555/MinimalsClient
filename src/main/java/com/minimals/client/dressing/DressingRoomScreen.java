@@ -46,6 +46,10 @@ public class DressingRoomScreen extends Screen {
     private PlayerSkinWidget previewWidget;
     /** Mutable holder so the preview widget's Supplier can see live updates without recreating it. */
     private PlayerSkin previewSkin;
+    /** Local-only overlay (not yet applied to the account) shown on top of currentSkin() in the
+     *  3D preview widget - e.g. a cape the user picked from the dropdown but hasn't pressed
+     *  Apply on yet. Cleared whenever a change is actually applied or the tab changes away. */
+    private PlayerSkin.Patch pendingPreview = PlayerSkin.Patch.EMPTY;
 
     /** Every dropdown currently laid out, so open/close-on-outside-click can be handled generically
      *  instead of one if-chain per tab. */
@@ -70,10 +74,13 @@ public class DressingRoomScreen extends Screen {
     private SkinLibrary.Entry selectedLibrarySkin;
 
     // Cape tab: dropdown of capes already unlocked on this account (Mojang has no "upload a
-    // cape" endpoint - only activating one already granted to the account).
+    // cape" endpoint - only activating one already granted to the account). Choosing one only
+    // previews it (pendingPreview / pendingCape) until Apply is pressed.
     private DropdownWidget capeDropdown;
     private List<MojangSkinService.Cape> ownedCapes = List.of();
     private boolean capesLoaded;
+    private MojangSkinService.Cape pendingCape;
+    private boolean pendingCapeIsNone;
 
     // Presets tab: apply/delete a saved bundle; "Save current as preset" captures whatever the
     // account is wearing right now (skin left unset unless it came from the Library, since a
@@ -107,7 +114,7 @@ public class DressingRoomScreen extends Screen {
         activeDropdowns.clear();
 
         previewSkin = currentSkin();
-        Supplier<PlayerSkin> skinSupplier = () -> previewSkin;
+        Supplier<PlayerSkin> skinSupplier = () -> previewSkin.with(pendingPreview);
         previewWidget = new PlayerSkinWidget(PREVIEW_W, PANEL_H - PAD * 2 - TAB_H - 30,
                 Minecraft.getInstance().getEntityModels(), skinSupplier);
         previewWidget.setPosition(px + PAD, py + PAD + TAB_H + 30);
@@ -135,11 +142,14 @@ public class DressingRoomScreen extends Screen {
     private Button tabButton(String label, Tab target, int x, int y, int w) {
         boolean active = tab == target;
         return new TabPillButton(x, y, w, TAB_H, label, active, btn -> {
-            if (tab != target) {
-                tab = target;
-                status = "";
-                rebuildWidgets();
-            }
+                    if (tab != target) {
+                        tab = target;
+                        status = "";
+                        pendingPreview = PlayerSkin.Patch.EMPTY;
+                        pendingCape = null;
+                        pendingCapeIsNone = false;
+                        rebuildWidgets();
+                    }
         });
     }
 
@@ -200,13 +210,17 @@ public class DressingRoomScreen extends Screen {
         int belowY = y + 22;
         switch (skinSource) {
             case UPLOAD_FILE -> {
-                addRenderableWidget(Button.builder(Component.literal("Choose PNG..."), btn -> pickAndUploadSkin())
+                addRenderableWidget(Button.builder(Component.literal("Choose PNG..."), btn -> pickLocalSkin())
                         .bounds(x, belowY, w, 20)
                         .build());
                 if (lastLocalSkinFile != null) {
-                    addRenderableWidget(Button.builder(Component.literal("Save to Library"),
+                    addRenderableWidget(Button.builder(Component.literal("Apply this skin"),
+                                    btn -> uploadLastLocalSkin())
+                            .bounds(x, belowY + 24, w - 56, 18)
+                            .build());
+                    addRenderableWidget(Button.builder(Component.literal("Save"),
                                     btn -> saveLastToLibrary())
-                            .bounds(x, belowY + 24, w, 18)
+                            .bounds(x + w - 52, belowY + 24, 52, 18)
                             .build());
                 }
             }
@@ -351,7 +365,23 @@ public class DressingRoomScreen extends Screen {
                 }));
     }
 
-    private void pickAndUploadSkin() {
+    private void pickLocalSkin() {
+        Path file = NativeFilePicker.pickPng("Choose a skin (64x64 PNG)");
+        if (file == null) {
+            return;
+        }
+        lastLocalSkinFile = file;
+        setStatus("Previewing - press Apply this skin to save it to your account.", false);
+        PreviewTextureLoader.previewSkin(file.toUri().toString(), currentSkin().model())
+                .thenAccept(patch -> Minecraft.getInstance().execute(() -> {
+                    if (file.equals(lastLocalSkinFile)) {
+                        pendingPreview = patch;
+                    }
+                }));
+        rebuildWidgets();
+    }
+
+    private void uploadLastLocalSkin() {
         if (!DressingRoomCooldown.isReady() || busy) {
             return;
         }
@@ -359,7 +389,7 @@ public class DressingRoomScreen extends Screen {
             setStatus("Not logged in to a Microsoft account.", true);
             return;
         }
-        Path file = NativeFilePicker.pickPng("Choose a skin (64x64 PNG)");
+        Path file = lastLocalSkinFile;
         if (file == null) {
             return;
         }
@@ -371,8 +401,8 @@ public class DressingRoomScreen extends Screen {
             setStatus(result.message(), !result.success());
             if (result.success()) {
                 DressingRoomCooldown.start();
+                pendingPreview = PlayerSkin.Patch.EMPTY;
                 refreshLocalPreviewBestEffort();
-                lastLocalSkinFile = file;
                 rebuildWidgets();
             }
         }));
@@ -402,22 +432,64 @@ public class DressingRoomScreen extends Screen {
         }
         capeDropdown = track(new DropdownWidget(x, y, w,
                 ownedCapes.isEmpty() ? "No capes unlocked" : "Choose a cape...", names, this::onCapeChosen));
-        String current = ownedCapes.stream().filter(MojangSkinService.Cape::active)
-                .map(MojangSkinService.Cape::name).findFirst().orElse("(No cape)");
+        String current = pendingCapeIsNone ? "(No cape)"
+                : pendingCape != null ? pendingCape.name()
+                : ownedCapes.stream().filter(MojangSkinService.Cape::active)
+                        .map(MojangSkinService.Cape::name).findFirst().orElse("(No cape)");
         capeDropdown.setSelected(current);
 
+        int belowY = y + 24;
+        boolean activeName = ownedCapes.stream().filter(MojangSkinService.Cape::active)
+                .map(MojangSkinService.Cape::name).findFirst().orElse("(No cape)").equals(current);
+        boolean changed = pendingCapeIsNone || pendingCape != null;
+        if (changed && !activeName) {
+            addRenderableWidget(Button.builder(Component.literal("Apply cape"), btn -> applyPendingCape())
+                    .bounds(x, belowY, w - 56, 20)
+                    .build());
+            addRenderableWidget(Button.builder(Component.literal("Cancel"), btn -> cancelPendingCape())
+                    .bounds(x + w - 52, belowY, 52, 20)
+                    .build());
+            belowY += 24;
+        }
+
         addRenderableWidget(Button.builder(Component.literal(cooldownLabel()), btn -> {})
-                .bounds(x, y + 24, w, 16)
+                .bounds(x, belowY, w, 16)
                 .build()).active = false;
     }
 
     private void onCapeChosen(String name) {
         if ("(No cape)".equals(name)) {
-            changeCape(null);
+            pendingCapeIsNone = true;
+            pendingCape = null;
+            pendingPreview = PlayerSkin.Patch.EMPTY;
+            rebuildWidgets();
             return;
         }
-        ownedCapes.stream().filter(c -> c.name().equals(name)).findFirst()
-                .ifPresent(c -> changeCape(c.id()));
+        ownedCapes.stream().filter(c -> c.name().equals(name)).findFirst().ifPresent(c -> {
+            pendingCapeIsNone = false;
+            pendingCape = c;
+            if (c.url() != null) {
+                PreviewTextureLoader.previewCape(c.url()).thenAccept(patch ->
+                        Minecraft.getInstance().execute(() -> {
+                            if (pendingCape == c) {
+                                pendingPreview = patch;
+                            }
+                        }));
+            }
+            rebuildWidgets();
+        });
+    }
+
+    private void cancelPendingCape() {
+        pendingCape = null;
+        pendingCapeIsNone = false;
+        pendingPreview = PlayerSkin.Patch.EMPTY;
+        rebuildWidgets();
+    }
+
+    private void applyPendingCape() {
+        String capeId = pendingCapeIsNone ? null : pendingCape != null ? pendingCape.id() : null;
+        changeCape(capeId);
     }
 
     private void changeCape(String capeId) {
@@ -436,7 +508,12 @@ public class DressingRoomScreen extends Screen {
             setStatus(result.message(), !result.success());
             if (result.success()) {
                 DressingRoomCooldown.start();
+                pendingCape = null;
+                pendingCapeIsNone = false;
+                pendingPreview = PlayerSkin.Patch.EMPTY;
+                capesLoaded = false;
                 refreshLocalPreviewBestEffort();
+                rebuildWidgets();
             }
         }));
     }

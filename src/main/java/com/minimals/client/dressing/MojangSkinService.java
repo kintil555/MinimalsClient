@@ -73,7 +73,7 @@ public final class MojangSkinService {
     }
 
     /** One cape already unlocked on the account, as returned by the profile endpoint. */
-    public record Cape(String id, String name, boolean active) {
+    public record Cape(String id, String name, boolean active, String url) {
     }
 
     /** A skin texture URL fetched from another player's public profile, by username. */
@@ -219,8 +219,9 @@ public final class MojangSkinService {
                     String id = o.has("id") ? o.get("id").getAsString() : null;
                     String name = o.has("alias") ? o.get("alias").getAsString() : id;
                     boolean active = o.has("state") && "ACTIVE".equals(o.get("state").getAsString());
+                    String url = o.has("url") ? o.get("url").getAsString() : null;
                     if (id != null) {
-                        capes.add(new Cape(id, name, active));
+                        capes.add(new Cape(id, name, active, url));
                     }
                 }
                 return capes;

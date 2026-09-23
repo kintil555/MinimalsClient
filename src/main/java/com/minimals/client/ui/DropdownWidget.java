@@ -33,6 +33,20 @@ public class DropdownWidget extends AbstractWidget {
         this.onSelect = onSelect;
     }
 
+    /** Width of the closed pill: hugs its label instead of stretching to the full column width,
+     *  right-aligned within that column so it reads as a compact control, not a full-width bar. */
+    private int pillWidth() {
+        String label = selected != null ? selected : placeholder;
+        int textW = UiRenderer.font().width(label);
+        int min = 64;
+        int max = getWidth();
+        return Math.max(min, Math.min(max, textW + 28));
+    }
+
+    private int pillX() {
+        return getX() + getWidth() - pillWidth();
+    }
+
     public void setOptions(List<String> options) {
         this.options = options;
         this.open = false;
@@ -52,9 +66,12 @@ public class DropdownWidget extends AbstractWidget {
 
     @Override
     public void onClick(MouseButtonEvent event, boolean doubleClick) {
+        double mx = event.x();
         double my = event.y();
         if (my <= getY() + ROW_H) {
-            open = !open && !options.isEmpty();
+            if (mx >= pillX() && mx < pillX() + pillWidth()) {
+                open = !open && !options.isEmpty();
+            }
             return;
         }
         if (open) {
@@ -69,7 +86,10 @@ public class DropdownWidget extends AbstractWidget {
 
     /** True when the click landed inside this widget's current (possibly open) bounds. */
     public boolean hitTest(double mx, double my) {
-        return mx >= getX() && mx < getX() + getWidth() && my >= getY() && my < getY() + totalHeight();
+        boolean overPill = mx >= pillX() && mx < pillX() + pillWidth() && my >= getY() && my < getY() + ROW_H;
+        boolean overList = open && mx >= getX() && mx < getX() + getWidth()
+                && my >= getY() + ROW_H && my < getY() + totalHeight();
+        return overPill || overList;
     }
 
     /** Widens the clickable area to the open list too - the base isMouseOver only knows about
@@ -92,17 +112,26 @@ public class DropdownWidget extends AbstractWidget {
     @Override
     protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         int w = getWidth();
-        UiRenderer.roundedRect(graphics, getX(), getY(), getX() + w, getY() + ROW_H, 5,
-                isHovered() ? UiRenderer.ROW_BG_HOVER : UiRenderer.SETTINGS_PANEL_BG);
+        int pw = pillWidth();
+        int px = pillX();
+
+        // Border ring so the pill reads as a distinct control against the panel, not a flat
+        // patch of the same background colour.
+        UiRenderer.roundedRect(graphics, px - 1, getY() - 1, px + pw + 1, getY() + ROW_H + 1, 5,
+                0x30FFFFFF);
+        UiRenderer.roundedRect(graphics, px, getY(), px + pw, getY() + ROW_H, 5,
+                isHovered() ? UiRenderer.HEADER_BTN_BG_HOVER : UiRenderer.HEADER_BTN_BG);
         String label = selected != null ? selected : placeholder;
-        UiRenderer.text(graphics, label, getX() + 8, getY() + (ROW_H - 8) / 2,
+        UiRenderer.text(graphics, label, px + 8, getY() + (ROW_H - 8) / 2,
                 selected != null ? UiRenderer.TEXT_PRIMARY : UiRenderer.TEXT_SECONDARY);
         String caret = open ? "^" : "v";
-        UiRenderer.text(graphics, caret, getX() + w - 14, getY() + (ROW_H - 8) / 2, UiRenderer.TEXT_SECONDARY);
+        UiRenderer.text(graphics, caret, px + pw - 14, getY() + (ROW_H - 8) / 2, UiRenderer.TEXT_SECONDARY);
 
         if (open) {
             int listY = getY() + ROW_H;
             int visible = Math.min(options.size(), MAX_VISIBLE);
+            UiRenderer.roundedRect(graphics, getX() - 1, listY - 1, getX() + w + 1, listY + visible * ROW_H + 1, 5,
+                    0x30FFFFFF);
             UiRenderer.roundedRect(graphics, getX(), listY, getX() + w, listY + visible * ROW_H, 5,
                     UiRenderer.PANEL_BG);
             for (int i = 0; i < visible; i++) {
