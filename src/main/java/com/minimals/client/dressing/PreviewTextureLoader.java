@@ -7,7 +7,10 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -36,13 +39,28 @@ final class PreviewTextureLoader {
     }
 
     /** Per-texture scratch cache file: downloadAndRegisterSkin requires a real path (it checks
-     *  Files.isRegularFile on it) and reuses it as an on-disk cache on repeat calls. Takes the
-     *  same counter value used for the Identifier so id and cache file always pair up 1:1, even
-     *  when multiple downloads are in flight at once. */
-    private static Path cacheFile(String suffix, int n) {
+     *  Files.isRegularFile on it) and reuses it as an on-disk cache on repeat calls. Keyed by a
+     *  hash of the actual texture URL (not a runtime counter) so the cache file always matches
+     *  the content it holds - a counter-based name collides with leftover files from a previous
+     *  game session (counter resets to 1 on restart), silently loading a stale, wrong texture
+     *  from disk instead of downloading the requested one. */
+    private static Path cacheFile(String suffix, String textureUrl) {
         return Minecraft.getInstance().gameDirectory.toPath()
                 .resolve("minimals").resolve("preview-cache")
-                .resolve(suffix + "_" + n + ".png");
+                .resolve(suffix + "_" + sha1Hex(textureUrl) + ".png");
+    }
+
+    private static String sha1Hex(String s) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-1").digest(s.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Downloads+registers a cape texture and returns just its Identifier, for drawing a small
@@ -53,7 +71,7 @@ final class PreviewTextureLoader {
     static java.util.concurrent.CompletableFuture<Identifier> registerCapeThumbnail(String textureUrl) {
         int n = COUNTER.incrementAndGet();
         Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/cape_thumb_" + n);
-        return downloader().downloadAndRegisterSkin(id, cacheFile("cape_thumb", n), textureUrl, false)
+        return downloader().downloadAndRegisterSkin(id, cacheFile("cape_thumb", textureUrl), textureUrl, false)
                 .thenApply(ClientAsset.Texture::texturePath);
     }
 
@@ -62,7 +80,7 @@ final class PreviewTextureLoader {
     static CompletableFuture<PlayerSkin.Patch> previewCape(String textureUrl) {
         int n = COUNTER.incrementAndGet();
         Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/cape_" + n);
-        return downloader().downloadAndRegisterSkin(id, cacheFile("cape", n), textureUrl, false)
+        return downloader().downloadAndRegisterSkin(id, cacheFile("cape", textureUrl), textureUrl, false)
                 .thenApply(texture -> PlayerSkin.Patch.create(
                         Optional.empty(),
                         Optional.of(new ClientAsset.ResourceTexture(texture.texturePath())),
@@ -75,7 +93,7 @@ final class PreviewTextureLoader {
     static CompletableFuture<PlayerSkin.Patch> previewSkin(String textureUrl, PlayerModelType model) {
         int n = COUNTER.incrementAndGet();
         Identifier id = Identifier.fromNamespaceAndPath("minimals", "preview/skin_" + n);
-        return downloader().downloadAndRegisterSkin(id, cacheFile("skin", n), textureUrl, false)
+        return downloader().downloadAndRegisterSkin(id, cacheFile("skin", textureUrl), textureUrl, false)
                 .thenApply(texture -> PlayerSkin.Patch.create(
                         Optional.of(new ClientAsset.ResourceTexture(texture.texturePath())),
                         Optional.empty(),

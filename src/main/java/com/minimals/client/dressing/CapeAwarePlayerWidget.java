@@ -52,6 +52,10 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
     private final Supplier<Boolean> showBack;
     private float rotationX = DEFAULT_ROTATION_X;
     private float rotationY = DEFAULT_ROTATION_Y;
+    /** Tracks the last showBack value so a tab switch resets the user's drag to a clean
+     *  front/back view instead of keeping whatever angle they left the model at - otherwise
+     *  "180 degrees" is buried under leftover drag rotation and doesn't read as a clean back view. */
+    private Boolean lastShowBack;
 
     public CapeAwarePlayerWidget(int width, int height, Supplier<PlayerSkin> skin, Supplier<Boolean> showBack) {
         super(0, 0, width, height, CommonComponents.EMPTY);
@@ -100,6 +104,11 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         }
 
         boolean back = Boolean.TRUE.equals(this.showBack.get());
+        if (this.lastShowBack == null || this.lastShowBack != back) {
+            this.lastShowBack = back;
+            this.rotationX = DEFAULT_ROTATION_X;
+            this.rotationY = DEFAULT_ROTATION_Y;
+        }
 
         if (renderState instanceof LivingEntityRenderState livingState) {
             livingState.bodyRot = back ? 180.0F : 0.0F;
