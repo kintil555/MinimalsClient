@@ -125,18 +125,22 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         // body and limbs disagree, since head/limb poses in the player model are computed
         // relative to bodyRot and don't all flip the same way. Facing front vs back is instead
         // done as a pure camera rotation on top of the Z-flip: an extra 180-degree yaw when the
-        // Cape tab wants the back visible. Note the yaw is applied BEFORE the Z-flip (not after)
-        // - the Z-flip changes handedness, so appending the same yaw afterward inverts its
-        // effect and also inverts the felt direction of horizontal drag. The widget's own
-        // drag-to-rotate is layered on top of all of that, exactly like vanilla
-        // PlayerSkinWidget's rotationX/rotationY.
+        // Cape tab wants the back visible.
+        //
+        // JOML's Quaternionf#mul(q) sets this = this * q. For quaternion-vector rotation
+        // v' = rotation * v, terms compose right-to-left against the vector: the LAST .mul()
+        // call is applied to the vector FIRST, and whatever was set first (via rotateY/rotateZ
+        // before any .mul()) ends up outermost, applied LAST. So drag rotation must be composed
+        // first (innermost/applied-first) and the Z-flip + back-yaw must be appended via .mul()
+        // afterward (outermost/applied-last), or the Z-flip's handedness change corrupts both
+        // the back-yaw direction and the felt drag direction.
         Quaternionf rotation = new Quaternionf();
-        if (back) {
-            rotation.rotateY((float) Math.PI);
-        }
-        rotation.mul(new Quaternionf().rotateZ((float) Math.PI));
+        rotation.rotateY(this.rotationY * (float) (Math.PI / 180.0));
         rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
-        rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0)));
+        rotation.mul(new Quaternionf().rotateZ((float) Math.PI));
+        if (back) {
+            rotation.mul(new Quaternionf().rotateY((float) Math.PI));
+        }
 
         float scale = FIT_SCALE * this.getHeight() / MODEL_HEIGHT;
         // Same translation vanilla's inventory screen uses: half the model's own bounding-box
