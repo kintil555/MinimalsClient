@@ -137,10 +137,10 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         Quaternionf rotation = new Quaternionf();
         rotation.rotateY(this.rotationY * (float) (Math.PI / 180.0));
         rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
-        rotation.mul(new Quaternionf().rotateZ((float) Math.PI));
         if (back) {
             rotation.mul(new Quaternionf().rotateY((float) Math.PI));
         }
+        rotation.mul(new Quaternionf().rotateZ((float) Math.PI));
 
         float scale = FIT_SCALE * this.getHeight() / MODEL_HEIGHT;
         // Same translation vanilla's inventory screen uses: half the model's own bounding-box
