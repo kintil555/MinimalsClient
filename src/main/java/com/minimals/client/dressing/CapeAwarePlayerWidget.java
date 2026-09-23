@@ -31,30 +31,45 @@ import java.util.function.Supplier;
  * body-texture-only pipeline (see {@code GuiSkinRenderState}/{@code GuiSkinRenderer}) with no
  * cape or elytra layer at all - it exists for the Skin Customization screen, which never needs
  * to preview a cape. This widget instead builds a real {@link AvatarRenderState} off the local
- * player (the same path vanilla's inventory screen uses to show the player holding items) and
- * overrides its {@code skin} field with the supplied preview skin, so the full layered player
+ * player (the same path vanilla's {@code InventoryScreen} uses to show the player holding items)
+ * and overrides its {@code skin} field with the supplied preview skin, so the full layered player
  * renderer (body + cape + elytra) draws through {@link GuiGraphicsExtractor#entity}. The
  * snapshot is then stripped down to a bare idle pose (no held item, no armor, no swing/use
  * animation) so it reads as a clean dressing-room mannequin instead of whatever the player is
  * actually doing in the world right now.
+ * <p>
+ * <b>Rotation model - copied verbatim from vanilla's own use of this same pipeline
+ * ({@code InventoryScreen.extractEntityInInventoryFollowsMouse}), not reinvented:</b> the
+ * {@code entity()} PiP renderer scales its internal camera by {@code (scale, scale, -scale)}
+ * (see {@code PictureInPictureRenderer.prepare}), i.e. the Z axis is mirrored for this whole
+ * preview pipeline. Because of that mirror, the "face the camera" base orientation vanilla uses
+ * is a 180-degree roll around Z ({@code rotateZ(PI)}) on the {@code rotation} quaternion, paired
+ * with {@code bodyRot = 180} set directly on the entity render state - NOT a Y-axis yaw baked
+ * into the quaternion. Turning the model left/right and up/down is likewise done the vanilla way:
+ * by driving the entity's own {@code bodyRot}/{@code yRot} (yaw) and {@code xRot} (pitch) fields,
+ * not by composing extra quaternions on top of the Z-roll base. The pitch quaternion is also
+ * reused as {@code overrideCameraAngle}, exactly as vanilla does, so the lighting/camera framing
+ * follows the same tilt as the model.
  */
 public class CapeAwarePlayerWidget extends AbstractWidget {
 
     private static final float MODEL_HEIGHT = 2.125F;
     private static final float FIT_SCALE = 0.97F;
-    private static final float ROTATION_SENSITIVITY = 2.5F;
-    private static final float DEFAULT_ROTATION_X = -5.0F;
-    private static final float DEFAULT_ROTATION_Y = 30.0F;
-    private static final float ROTATION_X_LIMIT = 50.0F;
+    private static final float ROTATION_SENSITIVITY = 1.0F;
+    private static final float DEFAULT_YAW = 0.0F;
+    private static final float DEFAULT_PITCH = 8.0F;
+    private static final float PITCH_LIMIT = 50.0F;
 
     private final Supplier<PlayerSkin> skin;
     /** When true, the model faces away from the camera (back visible) so a cape shows clearly. */
     private final Supplier<Boolean> showBack;
-    private float rotationX = DEFAULT_ROTATION_X;
-    private float rotationY = DEFAULT_ROTATION_Y;
+    /** Yaw offset added on top of the base facing, driven by horizontal drag. */
+    private float dragYaw = DEFAULT_YAW;
+    /** Pitch offset added on top of the base facing, driven by vertical drag. */
+    private float dragPitch = DEFAULT_PITCH;
     /** Tracks the last showBack value so a tab switch resets the user's drag to a clean
      *  front/back view instead of keeping whatever angle they left the model at - otherwise
-     *  "180 degrees" is buried under leftover drag rotation and doesn't read as a clean back view. */
+     *  "turn around" is buried under leftover drag rotation and doesn't read as a clean back view. */
     private Boolean lastShowBack;
 
     public CapeAwarePlayerWidget(int width, int height, Supplier<PlayerSkin> skin, Supplier<Boolean> showBack) {
@@ -106,33 +121,33 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         boolean back = Boolean.TRUE.equals(this.showBack.get());
         if (this.lastShowBack == null || this.lastShowBack != back) {
             this.lastShowBack = back;
-            this.rotationX = DEFAULT_ROTATION_X;
-            this.rotationY = DEFAULT_ROTATION_Y;
+            this.dragYaw = DEFAULT_YAW;
+            this.dragPitch = DEFAULT_PITCH;
         }
 
+        // Base facing: vanilla's InventoryScreen sets bodyRot = 180 on the entity itself (not on
+        // the rotation quaternion) to make the mannequin face the camera through this mirrored
+        // PiP pipeline. "Back" view is simply the front-facing 180 removed instead of added -
+        // exactly like turning the mannequin around on a turntable - so front and back share the
+        // same drag handedness instead of one of them fighting an extra flip.
+        float baseYaw = back ? 0.0F : 180.0F;
+
         if (renderState instanceof LivingEntityRenderState livingState) {
-            livingState.bodyRot = 0.0F;
-            livingState.yRot = 0.0F;
-            livingState.xRot = 0.0F;
+            livingState.bodyRot = baseYaw + this.dragYaw;
+            livingState.yRot = this.dragYaw;
+            livingState.xRot = this.dragPitch;
             livingState.boundingBoxWidth = livingState.boundingBoxWidth / livingState.scale;
             livingState.boundingBoxHeight = livingState.boundingBoxHeight / livingState.scale;
             livingState.scale = 1.0F;
         }
 
-        // Model space here has +Z pointing OUT of the player's chest (vanilla forward), so a
-        // camera sitting on +Z already looks at the front and needs no flip at all for the
-        // default (Skin tab) view. "Back" view is simply an extra 180-degree yaw added to the
-        // baseline yaw before any drag is applied, exactly like turning the mannequin around on
-        // a turntable - not a separate flip/mul step that can fight with drag handedness.
-        //
-        // Composition order (JOML: this.mul(q) => this*q, applied right-to-left to the vector):
-        // start from baseline+back yaw, then apply the user's drag yaw/pitch on top, so drag
-        // always behaves the same regardless of which tab is open.
-        float baseYaw = back ? 180.0F : 0.0F;
-        Quaternionf rotation = new Quaternionf();
-        rotation.rotateY(baseYaw * (float) (Math.PI / 180.0));
-        rotation.mul(new Quaternionf().rotateY(this.rotationY * (float) (Math.PI / 180.0)));
-        rotation.mul(new Quaternionf().rotateX(this.rotationX * (float) (Math.PI / 180.0)));
+        // rotation: the fixed Z-roll every entity() preview needs to face the mirrored PiP
+        // camera (see class javadoc) - yaw/pitch themselves live on the entity state above, not
+        // in this quaternion. overrideCameraAngle reuses the pitch, exactly as vanilla's
+        // InventoryScreen does, so the camera tilts along with the model instead of staying flat.
+        Quaternionf rotation = new Quaternionf().rotateZ((float) Math.PI);
+        Quaternionf pitchQuaternion = new Quaternionf().rotateX(this.dragPitch * (float) (Math.PI / 180.0));
+        rotation.mul(pitchQuaternion);
 
         float scale = FIT_SCALE * this.getHeight() / MODEL_HEIGHT;
         // Same translation vanilla's inventory screen uses: half the model's own bounding-box
@@ -140,14 +155,14 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         // body-only skin() pipeline, which does not apply to this entity() pipeline at all.
         Vector3f translation = new Vector3f(0.0F, renderState.boundingBoxHeight / 2.0F + 0.0625F, 0.0F);
 
-        graphics.entity(renderState, scale, translation, rotation, null,
+        graphics.entity(renderState, scale, translation, rotation, pitchQuaternion,
                 this.getX(), this.getY(), this.getRight(), this.getBottom());
     }
 
     @Override
     protected void onDrag(MouseButtonEvent event, double dx, double dy) {
-        this.rotationX = Mth.clamp(this.rotationX - (float) dy * ROTATION_SENSITIVITY, -ROTATION_X_LIMIT, ROTATION_X_LIMIT);
-        this.rotationY += (float) dx * ROTATION_SENSITIVITY;
+        this.dragYaw += (float) dx * ROTATION_SENSITIVITY;
+        this.dragPitch = Mth.clamp(this.dragPitch - (float) dy * ROTATION_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
     }
 
     @Override
@@ -163,4 +178,3 @@ public class CapeAwarePlayerWidget extends AbstractWidget {
         return null;
     }
 }
-
