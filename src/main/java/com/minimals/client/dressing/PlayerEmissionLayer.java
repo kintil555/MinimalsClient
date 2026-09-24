@@ -14,7 +14,8 @@ import net.minecraft.client.model.player.PlayerModel;
 
 /**
  * Draws {@link EmissionTextureManager}'s overlay texture on top of the local player's own
- * model, using an emissive render type so the masked pixels ignore world lighting entirely -
+ * model, using the unshaded {@code eyes} render type so the masked pixels ignore both world
+ * lighting and per-face directional shading entirely -
  * the same submit-the-whole-model-again-with-a-different-texture approach vanilla's
  * {@code EyesLayer} uses for Enderman/Spider eyes, just driven by a player-painted mask instead
  * of a fixed always-on texture. Skipped for every entity except the client's own player, since
@@ -44,7 +45,13 @@ public class PlayerEmissionLayer extends RenderLayer<AvatarRenderState, PlayerMo
         if (!EmissionTextureManager.hasContent()) {
             return;
         }
-        RenderType type = RenderTypes.entityTranslucentEmissive(EmissionTextureManager.TEXTURE_ID, false);
+        // RenderTypes.eyes, NOT entityTranslucentEmissive: the latter's pipeline defines
+        // PER_FACE_LIGHTING and takes Light0/Light1_Direction, so entity.vsh multiplies every face
+        // by a direction-dependent shade and the glow fades when the model turns. The eyes pipeline
+        // (Enderman/Spider) defines NO_CARDINAL_LIGHTING + NO_OVERLAY, so vertexColor = Color with no
+        // normal-based shading at all - identical brightness from every angle. Both use the same
+        // TRANSLUCENT blend, so the mask's alpha still works.
+        RenderType type = RenderTypes.eyes(EmissionTextureManager.TEXTURE_ID);
         submitNodeCollector.order(2).submitModel(this.getParentModel(), state, poseStack, type,
                 net.minecraft.util.LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY,
                 state.outlineColor, null);
