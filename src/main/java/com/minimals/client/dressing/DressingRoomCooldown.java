@@ -3,12 +3,12 @@ package com.minimals.client.dressing;
 import net.minecraft.util.Util;
 
 /**
- * Shared 1-minute cooldown between skin/cape changes, so the player does not hammer Mojang's
+ * Shared 10-second cooldown between skin/cape changes, so the player does not hammer Mojang's
  * API (which rate-limits skin changes on its own end anyway). Not persisted across restarts.
  */
 public final class DressingRoomCooldown {
 
-    public static final long DURATION_MS = 60_000L;
+    public static final long DURATION_MS = 10_000L;
 
     private static long readyAt = 0L;
 

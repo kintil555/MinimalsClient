@@ -759,6 +759,9 @@ public class DressingRoomScreen extends Screen {
      */
     private void refreshLocalPreviewBestEffort() {
         previewSkin = currentSkin();
+        // Pull the account's real new skin/cape and apply it in-game right away (no reconnect).
+        LocalSkinOverride.refreshFromAccount()
+                .thenRun(() -> Minecraft.getInstance().execute(() -> previewSkin = currentSkin()));
     }
 
     private void setStatus(String message, boolean error) {

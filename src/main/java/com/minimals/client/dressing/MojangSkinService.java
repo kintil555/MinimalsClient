@@ -76,6 +76,10 @@ public final class MojangSkinService {
     public record Cape(String id, String name, boolean active, String url) {
     }
 
+    /** Live skin/cape state of the logged-in account (URLs may be null). */
+    public record Appearance(String skinUrl, Model model, String capeUrl) {
+    }
+
     /** A skin texture URL fetched from another player's public profile, by username. */
     public record FetchedSkin(String username, String textureUrl) {
     }
@@ -228,6 +232,61 @@ public final class MojangSkinService {
             } catch (Exception e) {
                 MinimalClientMod.LOGGER.warn("Dressing room: fetching owned capes failed", e);
                 return java.util.List.<Cape>of();
+            }
+        }, IO);
+    }
+
+
+    /**
+     * Reads the account's CURRENT skin/cape straight from the authenticated profile endpoint
+     * (real-time, unlike the session server / the signed GameProfile property the game holds).
+     */
+    public static CompletableFuture<Appearance> fetchOwnAppearance() {
+        return CompletableFuture.supplyAsync(() -> {
+            String token = accessToken();
+            if (token == null) {
+                return null;
+            }
+            try {
+                HttpRequest request = HttpRequest.newBuilder(URI.create(OWN_PROFILE_ENDPOINT))
+                        .timeout(Duration.ofSeconds(15))
+                        .header("Authorization", "Bearer " + token)
+                        .GET()
+                        .build();
+                HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() / 100 != 2) {
+                    return null;
+                }
+                com.google.gson.JsonObject root = com.google.gson.JsonParser.parseString(response.body())
+                        .getAsJsonObject();
+                String skinUrl = null;
+                Model model = Model.CLASSIC;
+                if (root.has("skins")) {
+                    for (var el : root.getAsJsonArray("skins")) {
+                        var o = el.getAsJsonObject();
+                        if (o.has("state") && "ACTIVE".equals(o.get("state").getAsString()) && o.has("url")) {
+                            skinUrl = o.get("url").getAsString();
+                            if (o.has("variant") && "SLIM".equalsIgnoreCase(o.get("variant").getAsString())) {
+                                model = Model.SLIM;
+                            }
+                            break;
+                        }
+                    }
+                }
+                String capeUrl = null;
+                if (root.has("capes")) {
+                    for (var el : root.getAsJsonArray("capes")) {
+                        var o = el.getAsJsonObject();
+                        if (o.has("state") && "ACTIVE".equals(o.get("state").getAsString()) && o.has("url")) {
+                            capeUrl = o.get("url").getAsString();
+                            break;
+                        }
+                    }
+                }
+                return new Appearance(skinUrl, model, capeUrl);
+            } catch (Exception e) {
+                MinimalClientMod.LOGGER.warn("Dressing room: fetching own appearance failed", e);
+                return null;
             }
         }, IO);
     }

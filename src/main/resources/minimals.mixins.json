@@ -27,6 +27,7 @@
     "DeathScreenMixin",
     "WidgetHoverSoundMixin",
     "AvatarRendererMixin",
+    "PlayerInfoMixin",
     "LivingEntityRendererAddLayerInvoker"
   ],
   "mixins": [

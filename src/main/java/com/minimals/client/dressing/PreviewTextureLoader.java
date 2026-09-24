@@ -107,4 +107,14 @@ final class PreviewTextureLoader {
                         Optional.empty(),
                         Optional.of(model)));
     }
+
+    /** Downloads+registers a texture under a fresh id and returns it as a ResourceTexture usable in a
+     *  PlayerSkin.Patch. The cache file is keyed by URL hash, so a changed skin (new URL) never
+     *  reuses a stale file. */
+    static CompletableFuture<ClientAsset.ResourceTexture> register(String kind, String textureUrl, boolean skin) {
+        int n = COUNTER.incrementAndGet();
+        Identifier id = Identifier.fromNamespaceAndPath("minimals", "live/" + kind + "_" + n);
+        return downloader().downloadAndRegisterSkin(id, cacheFile("live_" + kind, textureUrl), textureUrl, skin)
+                .thenApply(t -> new ClientAsset.ResourceTexture(t.texturePath(), t.texturePath()));
+    }
 }
