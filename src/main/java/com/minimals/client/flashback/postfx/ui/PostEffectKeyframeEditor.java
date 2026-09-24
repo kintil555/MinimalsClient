@@ -219,6 +219,18 @@ public final class PostEffectKeyframeEditor {
             PostFxImpactPattern chosen = PostFxImpactPattern.values()[pattern.get()];
             apply(kf, update, k -> k.impact = k.impact.withPattern(chosen));
         }
+
+        // Only meaningful once the pattern has more than one frame to cycle through.
+        if (impact.pattern().frameCount() > 1) {
+            int[] frameInterval = {impact.frameInterval()};
+            ImGui.setNextItemWidth(160);
+            if (ImGui.sliderInt("Frame every", frameInterval, PostFxImpact.MIN_FRAME_INTERVAL,
+                    PostFxImpact.MAX_FRAME_INTERVAL, "%d ticks")
+                    && frameInterval[0] != impact.frameInterval()) {
+                int v = frameInterval[0];
+                apply(kf, update, k -> k.impact = k.impact.withFrameInterval(v));
+            }
+        }
     }
 
     private static void apply(PostEffectKeyframe kf, Consumer<Consumer<Keyframe>> update,

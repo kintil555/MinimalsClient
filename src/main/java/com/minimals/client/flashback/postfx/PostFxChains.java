@@ -111,12 +111,13 @@ final class PostFxChains {
      * only ever walks through two of them (flip on / off).
      */
     static PostChain impactChain(float intensity, float threshold, boolean flip, PostFxImpactPalette palette,
-                                 PostFxImpactPattern pattern) {
+                                 PostFxImpactPattern pattern, int frameIndex) {
         float mix = Math.max(0f, Math.min(1f, quantise(intensity, INTENSITY_QUANT)));
         float thr = Math.max(0.05f, Math.min(0.95f, quantise(threshold, 0.02f)));
-        String key = "impact|" + palette.serialName() + "|" + pattern.serialName() + "|" + Math.round(thr * 100) + "|" + Math.round(mix * 100)
-                + "|" + (flip ? "flip" : "flat");
-        return cachedOrBuild(key, () -> buildImpactConfig(mix, thr, flip, palette, pattern));
+        int frame = pattern.frameCount() <= 1 ? 0 : Math.floorMod(frameIndex, pattern.frameCount());
+        String key = "impact|" + palette.serialName() + "|" + pattern.serialName() + "|" + frame + "|"
+                + Math.round(thr * 100) + "|" + Math.round(mix * 100) + "|" + (flip ? "flip" : "flat");
+        return cachedOrBuild(key, () -> buildImpactConfig(mix, thr, flip, palette, pattern, frame));
     }
 
     private static PostChain cachedOrBuild(String key, java.util.function.Supplier<PostChainConfig> config) {
@@ -150,7 +151,8 @@ final class PostFxChains {
     }
 
     private static PostChainConfig buildImpactConfig(float mix, float threshold, boolean flip,
-                                                     PostFxImpactPalette palette, PostFxImpactPattern pattern) {
+                                                     PostFxImpactPalette palette, PostFxImpactPattern pattern,
+                                                     int frameIndex) {
         Identifier swap = Identifier.parse("minimals:swap");
         float[] light = palette.light();
         float[] dark = palette.dark();
@@ -165,10 +167,11 @@ final class PostFxChains {
         List<PostChainConfig.Input> inputs = new ArrayList<>();
         inputs.add(new PostChainConfig.TargetInput("In", MAIN, false, false));
         String shader = "minimals:post/impact";
-        if (pattern.texture() != null) {
+        String frameTexture = pattern.texture(frameIndex);
+        if (frameTexture != null) {
             shader = "minimals:post/impact_pattern";
             // Texture inputs resolve to textures/effect/<path>.png; bilinear keeps the speed lines smooth.
-            inputs.add(new PostChainConfig.TextureInput("Pattern", Identifier.parse(pattern.texture()), 1536, 1024, true));
+            inputs.add(new PostChainConfig.TextureInput("Pattern", Identifier.parse(frameTexture), 1536, 1024, true));
         }
         passes.add(new PostChainConfig.Pass(SCREENQUAD, Identifier.parse(shader), inputs, swap, impactUniforms));
         passes.add(simplePass("minecraft:post/blit", swap, MAIN, "BlitConfig",

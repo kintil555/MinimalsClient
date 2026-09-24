@@ -324,7 +324,8 @@ public class PostEffectKeyframe extends Keyframe {
                         (int) num(io, "flip_interval", PostFxImpact.DEFAULT.flipInterval()),
                         num(io, "threshold", PostFxImpact.DEFAULT.threshold()),
                         palette,
-                        PostFxImpactPattern.bySerialName(str(io, "pattern", "none")));
+                        PostFxImpactPattern.bySerialName(str(io, "pattern", "none")),
+                        (int) num(io, "frame_interval", PostFxImpact.DEFAULT.frameInterval()));
             }
             InterpolationType interpolationType = context.deserialize(o.get("interpolation_type"), InterpolationType.class);
             return new PostEffectKeyframe(
@@ -365,6 +366,7 @@ public class PostEffectKeyframe extends Keyframe {
             impact.addProperty("threshold", src.impact.threshold());
             impact.addProperty("palette", src.impact.palette().serialName());
             impact.addProperty("pattern", src.impact.pattern().serialName());
+            impact.addProperty("frame_interval", src.impact.frameInterval());
             o.add("impact", impact);
             o.add("interpolation_type", context.serialize(src.interpolationType()));
             return o;
