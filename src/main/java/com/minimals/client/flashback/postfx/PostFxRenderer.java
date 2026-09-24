@@ -59,7 +59,7 @@ public final class PostFxRenderer {
     private static PostChain impactChain(KeyframeChangePostEffect fx) {
         PostFxImpact impact = fx.impact();
         return PostFxChains.impactChain(fx.intensity(), impact.threshold(), impact.flippedAt(fx.impactElapsed()),
-                impact.palette());
+                impact.palette(), impact.pattern());
     }
 
     private static PostChain screenChain(KeyframeChangePostEffect fx) {

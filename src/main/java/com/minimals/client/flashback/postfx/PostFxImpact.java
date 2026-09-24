@@ -6,7 +6,8 @@ package com.minimals.client.flashback.postfx;
  * {@code flipInterval} > 0, the two tones swap every {@code flipInterval} ticks (the classic
  * negative/positive flash).
  */
-public record PostFxImpact(int duration, int flipInterval, float threshold, PostFxImpactPalette palette) {
+public record PostFxImpact(int duration, int flipInterval, float threshold, PostFxImpactPalette palette,
+                        PostFxImpactPattern pattern) {
 
     public static final int MIN_DURATION = 1;
     public static final int MAX_DURATION = 200;
@@ -14,29 +15,34 @@ public record PostFxImpact(int duration, int flipInterval, float threshold, Post
     public static final float MIN_THRESHOLD = 0.05f;
     public static final float MAX_THRESHOLD = 0.95f;
 
-    public static final PostFxImpact DEFAULT = new PostFxImpact(4, 2, 0.5f, PostFxImpactPalette.MONO);
+    public static final PostFxImpact DEFAULT = new PostFxImpact(4, 2, 0.5f, PostFxImpactPalette.MONO, PostFxImpactPattern.NONE);
 
     public PostFxImpact {
         duration = Math.max(MIN_DURATION, Math.min(MAX_DURATION, duration));
         flipInterval = Math.max(0, Math.min(MAX_FLIP, flipInterval));
         threshold = Math.max(MIN_THRESHOLD, Math.min(MAX_THRESHOLD, threshold));
         palette = palette == null ? PostFxImpactPalette.MONO : palette;
+        pattern = pattern == null ? PostFxImpactPattern.NONE : pattern;
     }
 
     public PostFxImpact withDuration(int value) {
-        return new PostFxImpact(value, flipInterval, threshold, palette);
+        return new PostFxImpact(value, flipInterval, threshold, palette, pattern);
     }
 
     public PostFxImpact withFlipInterval(int value) {
-        return new PostFxImpact(duration, value, threshold, palette);
+        return new PostFxImpact(duration, value, threshold, palette, pattern);
     }
 
     public PostFxImpact withThreshold(float value) {
-        return new PostFxImpact(duration, flipInterval, value, palette);
+        return new PostFxImpact(duration, flipInterval, value, palette, pattern);
     }
 
     public PostFxImpact withPalette(PostFxImpactPalette value) {
-        return new PostFxImpact(duration, flipInterval, threshold, value);
+        return new PostFxImpact(duration, flipInterval, threshold, value, pattern);
+    }
+
+    public PostFxImpact withPattern(PostFxImpactPattern value) {
+        return new PostFxImpact(duration, flipInterval, threshold, palette, value);
     }
 
     /** True when the tones are swapped {@code elapsed} ticks after the impact started. */

@@ -4,6 +4,7 @@ import com.minimals.client.flashback.postfx.PostEffectKeyframe;
 import com.minimals.client.flashback.postfx.PostFxBlock;
 import com.minimals.client.flashback.postfx.PostFxImpact;
 import com.minimals.client.flashback.postfx.PostFxImpactPalette;
+import com.minimals.client.flashback.postfx.PostFxImpactPattern;
 import com.minimals.client.flashback.postfx.PostFxKind;
 import com.minimals.client.flashback.postfx.PostFxScope;
 import com.minimals.client.flashback.postfx.BlockPickMode;
@@ -30,6 +31,7 @@ public final class PostEffectKeyframeEditor {
 
     private static final String[] KIND_LABELS = labels();
     private static final String[] PALETTE_LABELS = paletteLabels();
+    private static final String[] PATTERN_LABELS = patternLabels();
     private static final String[] SCOPE_LABELS = {PostFxScope.SCREEN.label(), PostFxScope.BLOCKS.label()};
 
     /** Reused across frames so typing in the Custom ID box keeps its text. */
@@ -53,6 +55,15 @@ public final class PostEffectKeyframeEditor {
         String[] out = new String[palettes.length];
         for (int i = 0; i < palettes.length; i++) {
             out[i] = palettes[i].label();
+        }
+        return out;
+    }
+
+    private static String[] patternLabels() {
+        PostFxImpactPattern[] patterns = PostFxImpactPattern.values();
+        String[] out = new String[patterns.length];
+        for (int i = 0; i < patterns.length; i++) {
+            out[i] = patterns[i].label();
         }
         return out;
     }
@@ -200,6 +211,13 @@ public final class PostEffectKeyframeEditor {
         if (ImGui.combo("Palette", palette, PALETTE_LABELS) && palette.get() != impact.palette().ordinal()) {
             PostFxImpactPalette chosen = PostFxImpactPalette.values()[palette.get()];
             apply(kf, update, k -> k.impact = k.impact.withPalette(chosen));
+        }
+
+        ImInt pattern = new ImInt(impact.pattern().ordinal());
+        ImGui.setNextItemWidth(160);
+        if (ImGui.combo("Pattern", pattern, PATTERN_LABELS) && pattern.get() != impact.pattern().ordinal()) {
+            PostFxImpactPattern chosen = PostFxImpactPattern.values()[pattern.get()];
+            apply(kf, update, k -> k.impact = k.impact.withPattern(chosen));
         }
     }
 
