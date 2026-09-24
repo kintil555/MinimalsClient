@@ -7,15 +7,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * A 64x64 (or 64x32) alpha-only "which pixels glow" mask, painted by the player with a brush
+ * An alpha-only (any resolution: 64x64, 64x32, 128x128, ...) "which pixels glow" mask, painted by the player with a brush
  * over their skin in {@link SkinEditorScreen}. This never touches the account's real skin PNG:
  * it is purely local, and is combined at render time by {@code PlayerEmissionMixin} to draw the
  * masked pixels again on top with a fullbright, unlit render layer (the same trick reference-mob
  * "glowing eyes" texture packs use: one extra unlit pass, positive pixels only).
  *
- * <p>Before any brushing the whole preview is shown darkened so the player can see which parts
- * are *not* marked yet; painted pixels preview at full brightness. Only the mask (not a
- * darkened copy of the skin) is persisted, one PNG per skin hash under
+ * <p>Only the mask (never a copy of the skin) is persisted, one PNG per skin hash under
  * {@code config/minimals/dressing/masks/}.
  */
 public final class SkinEmissionMask {
@@ -51,50 +49,54 @@ public final class SkinEmissionMask {
             return;
         }
         alpha[y * width + x] = (byte) Math.max(0, Math.min(255, value));
+        revision++;
     }
 
-    /** Paints a soft round brush centered at (cx, cy); strength falls off toward the edge. */
-    public void brush(double cx, double cy, double radius, int strength, boolean erase) {
-        int minX = (int) Math.floor(cx - radius);
-        int maxX = (int) Math.ceil(cx + radius);
-        int minY = (int) Math.floor(cy - radius);
-        int maxY = (int) Math.ceil(cy + radius);
-        for (int y = minY; y <= maxY; y++) {
-            for (int x = minX; x <= maxX; x++) {
-                double dx = x + 0.5 - cx;
-                double dy = y + 0.5 - cy;
-                double dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > radius) {
-                    continue;
-                }
-                double falloff = 1.0 - (dist / radius);
-                int delta = (int) Math.round(strength * falloff);
-                if (erase) {
-                    set(x, y, get(x, y) - delta);
-                } else {
-                    set(x, y, get(x, y) + delta);
-                }
-            }
-        }
+    /** Monotonic counter bumped by every mutation; lets renderers skip re-uploading when nothing changed. */
+    private int revision;
+
+    public int revision() {
+        return revision;
     }
 
     /**
-     * Paints a square of whole grid cells centered on ({@code cellX}, {@code cellY}), radius in
-     * whole cells (0 = just that one cell, 1 = a 3x3 block, ...). Unlike {@link #brush}, this
-     * snaps entirely to the pixel grid - every affected cell is set to full strength/cleared
-     * outright rather than a soft falloff - so a stroke always lines up with the skin's actual
-     * pixel boundaries instead of landing at a fractional, sub-pixel position.
+     * Sets one cell and reports whether it actually changed. Returning the change is what lets
+     * {@link GlowMaskHistory} record only the cells a stroke really touched.
      */
-    public void brushCell(int cellX, int cellY, int cellRadius, boolean erase) {
-        for (int y = cellY - cellRadius; y <= cellY + cellRadius; y++) {
-            for (int x = cellX - cellRadius; x <= cellX + cellRadius; x++) {
-                set(x, y, erase ? 0 : 255);
-            }
+    public boolean setIfChanged(int x, int y, int value) {
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+            return false;
         }
+        byte v = (byte) Math.max(0, Math.min(255, value));
+        int i = y * width + x;
+        if (alpha[i] == v) {
+            return false;
+        }
+        alpha[i] = v;
+        revision++;
+        return true;
+    }
+
+    /** Raw index accessors for bulk paths (flood fill, history) that already bounds-checked. */
+    public int getIndex(int i) {
+        return alpha[i] & 0xFF;
+    }
+
+    public void setIndex(int i, int value) {
+        byte v = (byte) value;
+        if (alpha[i] != v) {
+            alpha[i] = v;
+            revision++;
+        }
+    }
+
+    public int size() {
+        return alpha.length;
     }
 
     public void clear() {
         java.util.Arrays.fill(alpha, (byte) 0);
+        revision++;
     }
 
     public boolean isEmpty() {
@@ -104,6 +106,16 @@ public final class SkinEmissionMask {
             }
         }
         return true;
+    }
+
+    public int countGlowing() {
+        int n = 0;
+        for (byte b : alpha) {
+            if (b != 0) {
+                n++;
+            }
+        }
+        return n;
     }
 
     // ---- persistence --------------------------------------------------------------------
@@ -138,13 +150,17 @@ public final class SkinEmissionMask {
         if (!Files.exists(file)) {
             return mask;
         }
-        try (NativeImage image = NativeImage.read(Files.newInputStream(file))) {
-            int w = Math.min(width, image.getWidth());
-            int h = Math.min(height, image.getHeight());
-            for (int y = 0; y < h; y++) {
-                for (int x = 0; x < w; x++) {
-                    int argb = image.getPixel(x, y);
-                    mask.set(x, y, (argb >>> 24) & 0xFF);
+        try (var in = Files.newInputStream(file); NativeImage image = NativeImage.read(in)) {
+            int iw = image.getWidth();
+            int ih = image.getHeight();
+            // Same resolution: straight copy. Different (e.g. mask saved on a 64x64 skin, skin is
+            // now 128x128): nearest-neighbour rescale so the glow stays on the same body part
+            // instead of being cropped or shifted.
+            for (int y = 0; y < height; y++) {
+                int sy = iw == width && ih == height ? y : Math.min(ih - 1, (int) ((long) y * ih / height));
+                for (int x = 0; x < width; x++) {
+                    int sx = iw == width && ih == height ? x : Math.min(iw - 1, (int) ((long) x * iw / width));
+                    mask.alpha[y * width + x] = (byte) ((image.getPixel(sx, sy) >>> 24) & 0xFF);
                 }
             }
         } catch (IOException e) {
@@ -153,41 +169,41 @@ public final class SkinEmissionMask {
         return mask;
     }
 
+    /**
+     * Loads a saved mask at the resolution it was saved with, or {@code null} if none exists.
+     * For callers that only copy or clear a mask (presets, "Clear Glow Mask") and so neither know
+     * nor care what resolution the skin is - unlike {@link #load}, which needs a target size.
+     */
+    public static SkinEmissionMask loadNative(String skinKey) {
+        Path file = maskDirectory().resolve(safeName(skinKey) + ".png");
+        if (!Files.exists(file)) {
+            return null;
+        }
+        try (var in = Files.newInputStream(file); NativeImage image = NativeImage.read(in)) {
+            SkinEmissionMask mask = new SkinEmissionMask(image.getWidth(), image.getHeight());
+            for (int y = 0; y < mask.height; y++) {
+                for (int x = 0; x < mask.width; x++) {
+                    mask.alpha[y * mask.width + x] = (byte) ((image.getPixel(x, y) >>> 24) & 0xFF);
+                }
+            }
+            return mask;
+        } catch (IOException e) {
+            com.minimals.client.MinimalClientMod.LOGGER.warn("Failed to load emission mask", e);
+            return null;
+        }
+    }
+
+    /** Deletes the saved mask file for {@code skinKey}, if any. */
+    public static void delete(String skinKey) {
+        try {
+            Files.deleteIfExists(maskDirectory().resolve(safeName(skinKey) + ".png"));
+        } catch (IOException e) {
+            com.minimals.client.MinimalClientMod.LOGGER.warn("Failed to delete emission mask", e);
+        }
+    }
+
     private static String safeName(String key) {
         return key.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
-    /**
-     * Builds the darkened-base + bright-mask preview texture shown in the editor: every pixel
-     * of {@code baseSkin} is multiplied down except where the mask says "glowing", which stays
-     * (or is boosted to) full brightness. This is a *preview only* copy; the account's real skin
-     * PNG on disk/servers is never modified.
-     */
-    public NativeImage buildPreview(NativeImage baseSkin, float darkenFactor) {
-        int w = baseSkin.getWidth();
-        int h = baseSkin.getHeight();
-        NativeImage out = new NativeImage(w, h, true);
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                int argb = baseSkin.getPixel(x, y);
-                int a = (argb >>> 24) & 0xFF;
-                int r = (argb >>> 16) & 0xFF;
-                int g = (argb >>> 8) & 0xFF;
-                int b = argb & 0xFF;
-                int glow = get(x, y);
-                if (glow > 0) {
-                    float t = glow / 255f;
-                    r = Math.min(255, Math.round(r + (255 - r) * 0.15f * t));
-                    g = Math.min(255, Math.round(g + (255 - g) * 0.15f * t));
-                    b = Math.min(255, Math.round(b + (255 - b) * 0.15f * t));
-                } else {
-                    r = Math.round(r * darkenFactor);
-                    g = Math.round(g * darkenFactor);
-                    b = Math.round(b * darkenFactor);
-                }
-                out.setPixel(x, y, (a << 24) | (r << 16) | (g << 8) | b);
-            }
-        }
-        return out;
-    }
 }

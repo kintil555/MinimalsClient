@@ -30,13 +30,18 @@ public class PlayerEmissionLayer extends RenderLayer<AvatarRenderState, PlayerMo
     @Override
     public void submit(PoseStack poseStack, SubmitNodeCollector submitNodeCollector, int lightCoords,
                         AvatarRenderState state, float yRot, float xRot) {
-        if (!SkinGlowModule.isOn() || !EmissionTextureManager.hasContent()) {
+        if (!SkinGlowModule.isOn()) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || state.id != mc.player.getId()) {
             // Local-player-only: other players' clients render their own mask locally too, if
             // they have this mod, since the mask never travels over the network.
+            return;
+        }
+        // applies the saved mask on first frame / after a skin change (no-op otherwise)
+        EmissionTextureManager.syncActiveSkin(mc.player.getSkin());
+        if (!EmissionTextureManager.hasContent()) {
             return;
         }
         RenderType type = RenderTypes.entityTranslucentEmissive(EmissionTextureManager.TEXTURE_ID, false);

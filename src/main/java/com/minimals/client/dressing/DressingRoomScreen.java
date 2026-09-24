@@ -694,8 +694,10 @@ public class DressingRoomScreen extends Screen {
             if (preset.maskKey() != null) {
                 // Copy the preset's saved mask onto whatever skin key is now active, so the glow
                 // reappears under the skin the preset just applied.
-                SkinEmissionMask mask = SkinEmissionMask.load(preset.maskKey(), 64, 64);
-                mask.save(skinKey());
+                SkinEmissionMask mask = SkinEmissionMask.loadNative(preset.maskKey());
+                if (mask != null) {
+                    mask.save(skinKey());
+                }
             }
             setStatus(result.success() ? "Preset applied." : result.message(), !result.success());
             DressingRoomCooldown.start();
@@ -727,9 +729,9 @@ public class DressingRoomScreen extends Screen {
 
     private void clearMask() {
         String key = skinKey();
-        SkinEmissionMask mask = SkinEmissionMask.load(key, 64, 64);
-        mask.clear();
-        mask.save(key);
+        SkinEmissionMask.delete(key);
+        EmissionTextureManager.clear();
+        EmissionTextureManager.invalidate();
         setStatus("Glow mask cleared.", false);
     }
 
