@@ -1,5 +1,6 @@
 package com.minimals.client.flashback.postfx;
 
+import com.moulberry.flashback.Flashback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.PostChainConfig;
@@ -101,24 +102,41 @@ final class PostFxChains {
         String key = kind.serialName() + "|" + Math.round(blur * 100) + "|" + Math.round(pixel * 100) + "|"
                 + Math.round(mix * 100) + "|"
                 + (circles == null ? "screen" : circleKey(circles));
+        return cachedOrBuild(key, () -> buildConfig(kind, mix, pixel, blur, circles));
+    }
+
+    /**
+     * Impact Frame chain: main -> impact shader -> swap -> blit -> main. Threshold, flip and strength are
+     * uniforms fixed at build time, so each distinct (quantised) combination is its own chain; an impact
+     * only ever walks through two of them (flip on / off).
+     */
+    static PostChain impactChain(float intensity, float threshold, boolean flip, PostFxImpactPalette palette) {
+        float mix = Math.max(0f, Math.min(1f, quantise(intensity, INTENSITY_QUANT)));
+        float thr = Math.max(0.05f, Math.min(0.95f, quantise(threshold, 0.02f)));
+        String key = "impact|" + palette.serialName() + "|" + Math.round(thr * 100) + "|" + Math.round(mix * 100)
+                + "|" + (flip ? "flip" : "flat");
+        return cachedOrBuild(key, () -> buildImpactConfig(mix, thr, flip, palette));
+    }
+
+    private static PostChain cachedOrBuild(String key, java.util.function.Supplier<PostChainConfig> config) {
         PostChain cached = DYNAMIC.get(key);
         if (cached != null) {
             lastDynamicChain = cached;
             return cached;
         }
         // PostChain.load compiles pipelines: build at most one per frame, reuse the last chain
-        // meanwhile so a fast camera move / scrub cannot stall the renderer.
+        // meanwhile so a fast camera move / scrub cannot stall the renderer. Not while exporting:
+        // every exported frame must be exact, and a stall costs nothing there.
         long frame = Minecraft.getInstance().getFrameTimeNs();
-        if (lastBuildFrame == frame && lastDynamicChain != null) {
+        if (!Flashback.isExporting() && lastBuildFrame == frame && lastDynamicChain != null) {
             return lastDynamicChain;
         }
         lastBuildFrame = frame;
         try {
-            PostChainConfig config = buildConfig(kind, mix, pixel, blur, circles);
             if (projectionBuffer == null) {
                 projectionBuffer = new ProjectionMatrixBuffer("minimals_postfx");
             }
-            PostChain chain = PostChain.load(config, Minecraft.getInstance().getTextureManager(),
+            PostChain chain = PostChain.load(config.get(), Minecraft.getInstance().getTextureManager(),
                     net.minecraft.client.renderer.LevelTargetBundle.MAIN_TARGETS, Identifier.parse("minimals:dynamic"),
                     PROJECTION, projectionBuffer);
             DYNAMIC.put(key, chain);
@@ -128,6 +146,29 @@ final class PostFxChains {
             LOGGER.error("Failed to build post chain", e);
             return null;
         }
+    }
+
+    private static PostChainConfig buildImpactConfig(float mix, float threshold, boolean flip,
+                                                     PostFxImpactPalette palette) {
+        Identifier swap = Identifier.parse("minimals:swap");
+        float[] light = palette.light();
+        float[] dark = palette.dark();
+        List<UniformValue> impact = List.of(
+                new UniformValue.Vec4Uniform(new Vector4f(light[0], light[1], light[2], 1f)),
+                new UniformValue.Vec4Uniform(new Vector4f(dark[0], dark[1], dark[2], 1f)),
+                new UniformValue.Vec4Uniform(new Vector4f(threshold, flip ? 1f : 0f, mix, 0f)));
+        Map<String, List<UniformValue>> impactUniforms = new LinkedHashMap<>();
+        impactUniforms.put("ImpactConfig", impact);
+
+        List<PostChainConfig.Pass> passes = new ArrayList<>();
+        passes.add(new PostChainConfig.Pass(SCREENQUAD, Identifier.parse("minimals:post/impact"),
+                List.of(new PostChainConfig.TargetInput("In", MAIN, false, false)), swap, impactUniforms));
+        passes.add(simplePass("minecraft:post/blit", swap, MAIN, "BlitConfig",
+                List.of(entry("ColorModulate", "vec4", new UniformValue.Vec4Uniform(new Vector4f(1f, 1f, 1f, 1f))))));
+
+        Map<Identifier, PostChainConfig.InternalTarget> targets = new LinkedHashMap<>();
+        targets.put(swap, new PostChainConfig.InternalTarget(Optional.empty(), Optional.empty(), false, 0));
+        return new PostChainConfig(targets, passes);
     }
 
     private static PostChainConfig buildConfig(PostFxKind kind, float mix, float pixel, float blur,
@@ -152,6 +193,7 @@ final class PostFxChains {
             // Full-strength invert; the mix pass supplies the intensity.
             case INVERT -> passes.add(simplePass("minecraft:post/invert", MAIN, FX,
                     "InvertConfig", List.of(entry("InverseAmount", "float", new UniformValue.FloatUniform(1.0f)))));
+            case IMPACT -> throw new IllegalArgumentException("IMPACT uses impactChain()");
             case CUSTOM -> throw new IllegalArgumentException("CUSTOM has no dynamic chain");
         }
 

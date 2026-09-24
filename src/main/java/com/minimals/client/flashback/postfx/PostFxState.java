@@ -19,18 +19,33 @@ public final class PostFxState {
     private static final List<KeyframeChangePostEffect> PENDING = new ArrayList<>();
     private static final List<KeyframeChangePostEffect> ACTIVE = new ArrayList<>();
     private static boolean passStarted;
+    /** Timeline tick (fractional) the current pass is applying. */
+    private static float passTick = Float.NaN;
 
     private PostFxState() {
     }
 
-    /** Called at the start of every keyframe pass of the game handler. */
-    public static synchronized void beginApply() {
+    /** Called at the start of every keyframe pass of the game handler, with the tick it applies. */
+    public static synchronized void beginApply(float tick) {
         PENDING.clear();
+        passTick = tick;
         passStarted = true;
     }
 
-    /** Called by KeyframeChangePostEffect.apply. */
+    /**
+     * Called by KeyframeChangePostEffect.apply. A timed change (Impact Frame) is only kept while the
+     * pass tick lies inside [start, start + duration): the track keeps handing it out after it ended
+     * (and export re-applies a track's last keyframe), so the window is enforced here, where the
+     * exact tick is known.
+     */
     public static synchronized void submit(KeyframeChangePostEffect change) {
+        if (change.kind().isTimed()) {
+            float elapsed = passTick - change.impactStart();
+            if (Float.isNaN(elapsed) || elapsed < 0f || elapsed >= change.impact().duration()) {
+                return;
+            }
+            change = change.withImpactElapsed(elapsed);
+        }
         PENDING.add(change);
     }
 
@@ -57,5 +72,6 @@ public final class PostFxState {
         PENDING.clear();
         ACTIVE.clear();
         passStarted = false;
+        passTick = Float.NaN;
     }
 }

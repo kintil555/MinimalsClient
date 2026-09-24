@@ -7,6 +7,8 @@ public enum PostFxKind {
     BLUR("blur", "Blur"),
     INVERT("invert", "Invert"),
     PIXELATE("pixelate", "Pixelated"),
+    /** Timed two-tone flash: lasts a fixed number of ticks from its keyframe (drawn as a bar). */
+    IMPACT("impact", "Impact Frame"),
     /** Any resource-pack post effect, addressed by id ("namespace:name"). */
     CUSTOM("custom", "Custom");
 
@@ -16,6 +18,11 @@ public enum PostFxKind {
     PostFxKind(String serialName, String label) {
         this.serialName = serialName;
         this.label = label;
+    }
+
+    /** True for effects that run for a fixed duration from their keyframe instead of being interpolated. */
+    public boolean isTimed() {
+        return this == IMPACT;
     }
 
     public String serialName() {

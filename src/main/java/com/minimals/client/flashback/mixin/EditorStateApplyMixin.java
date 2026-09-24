@@ -23,7 +23,7 @@ public abstract class EditorStateApplyMixin {
             at = @At("HEAD"), remap = false)
     private void minimals$beginPostFxPass(KeyframeHandler handler, float tick, long stamp, CallbackInfo ci) {
         if (handler instanceof MinecraftKeyframeHandler) {
-            PostFxState.beginApply();
+            PostFxState.beginApply(tick);
         }
     }
 }

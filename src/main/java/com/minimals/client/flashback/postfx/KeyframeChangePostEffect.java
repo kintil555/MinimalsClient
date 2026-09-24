@@ -16,8 +16,26 @@ public record KeyframeChangePostEffect(
         float intensity,
         float pixelSize,
         float blurRadius,
-        List<PostFxBlock> blocks
+        List<PostFxBlock> blocks,
+        PostFxImpact impact,
+        /** IMPACT only: tick of the keyframe that started the impact; NaN when unknown. */
+        float impactStart,
+        /** IMPACT only: ticks since {@link #impactStart}; NaN until PostFxState resolved it. */
+        float impactElapsed
 ) implements KeyframeChange {
+
+    /** Change of a non-timed effect. */
+    public KeyframeChangePostEffect(PostFxKind kind, String customId, PostFxScope scope, float intensity,
+                                    float pixelSize, float blurRadius, List<PostFxBlock> blocks) {
+        this(kind, customId, scope, intensity, pixelSize, blurRadius, blocks, PostFxImpact.DEFAULT,
+                Float.NaN, Float.NaN);
+    }
+
+    /** The same impact change with its elapsed time filled in (see PostFxState.submit). */
+    public KeyframeChangePostEffect withImpactElapsed(float elapsed) {
+        return new KeyframeChangePostEffect(kind, customId, scope, intensity, pixelSize, blurRadius, blocks,
+                impact, impactStart, elapsed);
+    }
 
     @Override
     public void apply(KeyframeHandler keyframeHandler) {
@@ -29,7 +47,8 @@ public record KeyframeChangePostEffect(
         KeyframeChangePostEffect other = (KeyframeChangePostEffect) to;
         // Keyframes with a different effect type / render mode cannot connect (the timeline shows
         // them yellow with a warning). Never blend or switch mid-way: hold the left one.
-        if (other.kind != this.kind || other.scope != this.scope || !other.customId.equals(this.customId)) {
+        // A timed effect (Impact Frame) is an event, not a value: it never blends either.
+        if (this.kind.isTimed() || other.kind != this.kind || other.scope != this.scope || !other.customId.equals(this.customId)) {
             return this;
         }
         return new KeyframeChangePostEffect(
@@ -39,7 +58,8 @@ public record KeyframeChangePostEffect(
                 lerp(this.intensity, other.intensity, amount),
                 lerp(this.pixelSize, other.pixelSize, amount),
                 lerp(this.blurRadius, other.blurRadius, amount),
-                this.blocks.size() == other.blocks.size() ? lerpBlocks(this.blocks, other.blocks, amount) : this.blocks
+                this.blocks.size() == other.blocks.size() ? lerpBlocks(this.blocks, other.blocks, amount) : this.blocks,
+                this.impact, this.impactStart, this.impactElapsed
         );
     }
 

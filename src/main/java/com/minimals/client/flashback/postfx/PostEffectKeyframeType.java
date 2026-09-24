@@ -58,6 +58,15 @@ public class PostEffectKeyframeType implements KeyframeType<PostEffectKeyframe> 
         return true;
     }
 
+    /**
+     * Impact Frame keyframes are bars with a length; one that starts left of the visible timeline
+     * must still be drawn where it reaches into view (same as Flashback's Audio element).
+     */
+    @Override
+    public boolean cullKeyframesInTimelineToTheLeft() {
+        return false;
+    }
+
     @Override
     public @Nullable PostEffectKeyframe createDirect() {
         return null;

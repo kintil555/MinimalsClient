@@ -7,6 +7,7 @@
   "client": [
     "PostEffectRenderMixin",
     "EditorStateApplyMixin",
+    "KeyframeTrackMixin",
     "KeyframeGsonMixin",
     "FlashbackGsonMixin",
     "BlockPickHighlightMixin"

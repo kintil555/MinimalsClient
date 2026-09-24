@@ -44,11 +44,22 @@ public final class PostFxRenderer {
             if (fx.intensity() <= 0.0f && fx.kind() != PostFxKind.CUSTOM) {
                 continue;
             }
-            PostChain chain = fx.scope() == PostFxScope.BLOCKS ? blockChain(fx, main) : screenChain(fx);
+            PostChain chain;
+            if (fx.kind() == PostFxKind.IMPACT) {
+                chain = impactChain(fx);
+            } else {
+                chain = fx.scope() == PostFxScope.BLOCKS ? blockChain(fx, main) : screenChain(fx);
+            }
             if (chain != null) {
                 chain.process(main, pool);
             }
         }
+    }
+
+    private static PostChain impactChain(KeyframeChangePostEffect fx) {
+        PostFxImpact impact = fx.impact();
+        return PostFxChains.impactChain(fx.intensity(), impact.threshold(), impact.flippedAt(fx.impactElapsed()),
+                impact.palette());
     }
 
     private static PostChain screenChain(KeyframeChangePostEffect fx) {

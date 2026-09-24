@@ -2,6 +2,8 @@ package com.minimals.client.flashback.postfx.ui;
 
 import com.minimals.client.flashback.postfx.PostEffectKeyframe;
 import com.minimals.client.flashback.postfx.PostFxBlock;
+import com.minimals.client.flashback.postfx.PostFxImpact;
+import com.minimals.client.flashback.postfx.PostFxImpactPalette;
 import com.minimals.client.flashback.postfx.PostFxKind;
 import com.minimals.client.flashback.postfx.PostFxScope;
 import com.minimals.client.flashback.postfx.BlockPickMode;
@@ -14,6 +16,7 @@ import imgui.moulberry90.type.ImString;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
@@ -26,6 +29,7 @@ import java.util.function.Consumer;
 public final class PostEffectKeyframeEditor {
 
     private static final String[] KIND_LABELS = labels();
+    private static final String[] PALETTE_LABELS = paletteLabels();
     private static final String[] SCOPE_LABELS = {PostFxScope.SCREEN.label(), PostFxScope.BLOCKS.label()};
 
     /** Reused across frames so typing in the Custom ID box keeps its text. */
@@ -42,6 +46,23 @@ public final class PostEffectKeyframeEditor {
             out[i] = kinds[i].label();
         }
         return out;
+    }
+
+    private static String[] paletteLabels() {
+        PostFxImpactPalette[] palettes = PostFxImpactPalette.values();
+        String[] out = new String[palettes.length];
+        for (int i = 0; i < palettes.length; i++) {
+            out[i] = palettes[i].label();
+        }
+        return out;
+    }
+
+    /** Switching to a timed effect: it only ever covers the whole screen. */
+    private static void setKind(PostEffectKeyframe k, PostFxKind kind) {
+        k.kind = kind;
+        if (kind.isTimed()) {
+            k.scope = PostFxScope.SCREEN;
+        }
     }
 
     // ---- "add keyframe" popup -------------------------------------------------------------------
@@ -66,7 +87,7 @@ public final class PostEffectKeyframeEditor {
         ImInt kind = new ImInt(draft.kind.ordinal());
         ImGui.setNextItemWidth(160);
         if (ImGui.combo("Effect", kind, KIND_LABELS)) {
-            draft.kind = PostFxKind.values()[kind.get()];
+            setKind(draft, PostFxKind.values()[kind.get()]);
         }
         if (draft.kind == PostFxKind.CUSTOM) {
             draft.customId = customIdField(draft, draft.customId);
@@ -88,7 +109,7 @@ public final class PostEffectKeyframeEditor {
         ImGui.setNextItemWidth(160);
         if (ImGui.combo("Effect", kindIdx, KIND_LABELS) && kindIdx.get() != kind.ordinal()) {
             PostFxKind chosen = PostFxKind.values()[kindIdx.get()];
-            update.accept(k -> ((PostEffectKeyframe) k).kind = chosen);
+            update.accept(k -> setKind((PostEffectKeyframe) k, chosen));
         }
 
         if (kind == PostFxKind.CUSTOM) {
@@ -107,6 +128,9 @@ public final class PostEffectKeyframeEditor {
 
         drawKindParams(keyframe, update);
 
+        if (kind.isTimed()) {
+            return; // an Impact Frame has no render-mode / block list
+        }
         ImGui.separator();
         ImInt scopeIdx = new ImInt(keyframe.scope.ordinal());
         ImGui.setNextItemWidth(160);
@@ -136,6 +160,46 @@ public final class PostEffectKeyframeEditor {
                     && p[0] != kf.pixelSize) {
                 apply(kf, update, k -> k.pixelSize = p[0]);
             }
+        } else if (kf.kind == PostFxKind.IMPACT) {
+            drawImpactParams(kf, update);
+        }
+    }
+
+    /** Impact Frame: how long it lasts and how the two tones look. Same update rules as above. */
+    private static void drawImpactParams(PostEffectKeyframe kf, Consumer<Consumer<Keyframe>> update) {
+        PostFxImpact impact = kf.impact;
+
+        int[] duration = {impact.duration()};
+        ImGui.setNextItemWidth(160);
+        if (ImGui.sliderInt("Duration", duration, PostFxImpact.MIN_DURATION, PostFxImpact.MAX_DURATION, "%d ticks")
+                && duration[0] != impact.duration()) {
+            int v = duration[0];
+            apply(kf, update, k -> k.impact = k.impact.withDuration(v));
+        }
+        ImGui.sameLine();
+        ImGui.textDisabled(String.format(Locale.ROOT, "%.2f s", impact.duration() / 20f));
+
+        int[] flip = {impact.flipInterval()};
+        ImGui.setNextItemWidth(160);
+        if (ImGui.sliderInt("Flip every (0 = off)", flip, 0, PostFxImpact.MAX_FLIP, "%d ticks")
+                && flip[0] != impact.flipInterval()) {
+            int v = flip[0];
+            apply(kf, update, k -> k.impact = k.impact.withFlipInterval(v));
+        }
+
+        float[] threshold = {impact.threshold()};
+        ImGui.setNextItemWidth(160);
+        if (ImGui.sliderFloat("Threshold", threshold, PostFxImpact.MIN_THRESHOLD, PostFxImpact.MAX_THRESHOLD, "%.2f")
+                && threshold[0] != impact.threshold()) {
+            float v = threshold[0];
+            apply(kf, update, k -> k.impact = k.impact.withThreshold(v));
+        }
+
+        ImInt palette = new ImInt(impact.palette().ordinal());
+        ImGui.setNextItemWidth(160);
+        if (ImGui.combo("Palette", palette, PALETTE_LABELS) && palette.get() != impact.palette().ordinal()) {
+            PostFxImpactPalette chosen = PostFxImpactPalette.values()[palette.get()];
+            apply(kf, update, k -> k.impact = k.impact.withPalette(chosen));
         }
     }
 
