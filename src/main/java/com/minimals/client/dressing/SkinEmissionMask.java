@@ -78,6 +78,21 @@ public final class SkinEmissionMask {
         }
     }
 
+    /**
+     * Paints a square of whole grid cells centered on ({@code cellX}, {@code cellY}), radius in
+     * whole cells (0 = just that one cell, 1 = a 3x3 block, ...). Unlike {@link #brush}, this
+     * snaps entirely to the pixel grid - every affected cell is set to full strength/cleared
+     * outright rather than a soft falloff - so a stroke always lines up with the skin's actual
+     * pixel boundaries instead of landing at a fractional, sub-pixel position.
+     */
+    public void brushCell(int cellX, int cellY, int cellRadius, boolean erase) {
+        for (int y = cellY - cellRadius; y <= cellY + cellRadius; y++) {
+            for (int x = cellX - cellRadius; x <= cellX + cellRadius; x++) {
+                set(x, y, erase ? 0 : 255);
+            }
+        }
+    }
+
     public void clear() {
         java.util.Arrays.fill(alpha, (byte) 0);
     }

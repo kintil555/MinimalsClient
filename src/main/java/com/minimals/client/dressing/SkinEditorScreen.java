@@ -8,34 +8,34 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.texture.AbstractTexture;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.entity.player.PlayerSkin;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Brush editor for the local-only "glow mask": load the skin PNG, brush over the parts that
- * should glow (eyes, patterns, ...). Everywhere not yet brushed previews darkened so it is clear
- * what is still unmarked, matching the reference behaviour the player described (start dark,
- * painted areas light up). Left click/drag paints, right click/drag erases. Saving writes only
- * the mask (see {@link SkinEmissionMask}) - the skin PNG itself is never modified or re-uploaded
- * from here.
+ * Brush editor for the local-only "glow mask": load the skin currently being worn, brush over
+ * the parts that should glow (eyes, patterns, ...). Everywhere not yet brushed previews darkened
+ * so it is clear what is still unmarked; painted areas light up. Left click/drag paints, right
+ * click/drag erases. Saving writes only the mask (see {@link SkinEmissionMask}) - the skin PNG
+ * itself is never modified or re-uploaded from here.
  * <p>
- * Rewritten from scratch (not patched) to fix three bugs that made the tab unusable: the atlas
- * never actually loaded the account's real skin (it silently started from a fully blank 64x64
- * canvas, so nothing painted ever mapped to anything the player could recognise); the brush had
- * no pixel grid at all, so strokes looked "free" instead of snapping to the skin's actual pixel
- * grid; and the panel had a fixed height that was never checked against the canvas it was meant
- * to contain, so the action buttons sat underneath/overlapping the canvas whenever the loaded
- * skin was drawn at a pixel size that made it taller than the hard-coded panel. All three are
- * fixed by (1) resolving the account skin's real PNG bytes straight from Minecraft's on-disk skin
- * cache instead of assuming CPU-side pixels are reachable through the GPU texture, (2) drawing an
- * explicit grid line after every pixel cell, and (3) sizing the panel and the button row from the
- * canvas's own measured size instead of a constant that was never kept in sync with it.
+ * Rewritten from scratch a second time. The first rewrite fixed the missing grid and the button/
+ * canvas overlap, but still guessed the account's skin cache location on disk - that guess turned
+ * out to occasionally resolve to a valid-looking but wrong file (or, worse, silently pass a
+ * corrupt size through), producing a screen-filling canvas with no real skin drawn on it. This
+ * version never touches the filesystem to find the active skin: it reads the exact same pixels
+ * the game itself is currently rendering, straight out of the client's own texture manager (see
+ * {@link #readActiveSkinPixels()}), which is the one source that cannot disagree with what the
+ * player actually sees on their character. The canvas is always sized to that image's real
+ * width/height rather than an assumed 64x64, so the pixel grid drawn over it - and the brush,
+ * which now snaps to whole grid cells instead of a free-floating radius - always matches the
+ * loaded texture's actual resolution, whatever it is.
  */
 public class SkinEditorScreen extends Screen {
 
@@ -45,11 +45,9 @@ public class SkinEditorScreen extends Screen {
     private static final int GAP_ABOVE_BUTTONS = 10;
     private static final int PANEL_RADIUS = 10;
     private static final float DARKEN = 0.35f;
-    private static final float DEFAULT_BRUSH_RADIUS = 1.6f;
+    private static final int BRUSH_CELL_RADIUS = 0;
     private static final int MIN_PIXEL_SIZE = 4;
-    private static final int MAX_PIXEL_SIZE = 10;
-    /** Leave room for the screen border/margins when picking how big to draw each skin pixel. */
-    private static final int MAX_CANVAS_SPAN = 420;
+    private static final int MAX_PIXEL_SIZE = 16;
     private static final int GRID_LINE_COLOR = 0x30000000;
     private static final int GRID_LINE_COLOR_LIGHT = 0x20FFFFFF;
 
@@ -58,9 +56,12 @@ public class SkinEditorScreen extends Screen {
     private SkinEmissionMask mask;
     private String skinKey;
     private int pixelSize = 8;
-    private final float brushRadius = DEFAULT_BRUSH_RADIUS;
     private boolean dirty;
     private String status = "";
+    /** Grid cell last painted by the in-progress drag, so a fast mouse move fills every cell the
+     *  cursor crossed instead of only the cells it happened to land on between two mouse events. */
+    private int lastPaintCellX = Integer.MIN_VALUE;
+    private int lastPaintCellY = Integer.MIN_VALUE;
 
     private Button loadButton;
     private Button saveButton;
@@ -71,21 +72,17 @@ public class SkinEditorScreen extends Screen {
         this.returnTo = returnTo;
     }
 
-    // ---- layout, derived from the loaded canvas instead of a fixed constant -----------------
+    // ---- layout, derived entirely from the loaded canvas's real size -----------------------
 
     private int canvasWidthPx() {
-        return skinPixels != null ? skinPixels.getWidth() * pixelSize : 64 * pixelSize;
+        return skinPixels.getWidth() * pixelSize;
     }
 
     private int canvasHeightPx() {
-        return skinPixels != null ? skinPixels.getHeight() * pixelSize : 64 * pixelSize;
+        return skinPixels.getHeight() * pixelSize;
     }
 
     private int panelWidth() {
-        // Hard-clamped to the actual window size (minus a margin) no matter what the canvas
-        // measures out to - a screen-sized panel with its Close button pushed off past the
-        // bottom edge is exactly what made this unusable before, so this is a second, independent
-        // safety net on top of fitPixelSize() rather than trusting that calculation alone.
         int max = Math.max(260, width - 40);
         return Math.min(Math.max(canvasWidthPx() + PAD * 2, 260), max);
     }
@@ -112,13 +109,12 @@ public class SkinEditorScreen extends Screen {
         return panelY() + PAD + HEADER_H;
     }
 
-    /** Picks the largest pixel size that keeps the whole skin on screen, so a taller/odd-shaped
-     *  skin texture never forces the panel past the window edge. Also caps against the actual
-     *  window size, not just the fixed span, since a small window could still be narrower than
-     *  MAX_CANVAS_SPAN. */
-    private void fitPixelSize(int skinW, int skinH) {
-        int longest = Math.max(skinW, skinH);
-        int span = Math.min(MAX_CANVAS_SPAN, Math.min(width, height) - 80);
+    /** Picks the largest whole-pixel size (so grid lines stay crisp, no fractional cells) that
+     *  keeps the loaded texture's real width/height entirely on screen - never a fixed guess,
+     *  always derived from skinPixels and the current window size. */
+    private void fitPixelSize() {
+        int longest = Math.max(skinPixels.getWidth(), skinPixels.getHeight());
+        int span = Math.max(64, Math.min(width, height) - 80);
         int size = span / Math.max(1, longest);
         this.pixelSize = Math.max(MIN_PIXEL_SIZE, Math.min(MAX_PIXEL_SIZE, size));
     }
@@ -162,78 +158,47 @@ public class SkinEditorScreen extends Screen {
                 : mc.getSkinManager().createLookup(mc.getGameProfile(), false).get();
         skinKey = skin.body().texturePath().toString();
 
-        NativeImage fromDisk = readSkinFromDiskCache(skin);
-        if (fromDisk != null) {
-            skinPixels = fromDisk;
-            status = "Loaded your current skin. Use \"Load Skin PNG...\" to paint a different file instead.";
+        NativeImage active = readActiveSkinPixels(skin);
+        if (active != null) {
+            skinPixels = active;
+            status = "Editing your current skin (" + active.getWidth() + "x" + active.getHeight()
+                    + "). Use \"Load Skin PNG...\" to paint a different file instead.";
         } else {
-            // Couldn't resolve the account's cached skin file (offline-mode account, a built-in
-            // Steve/Alex default with no cache entry, a cache layout this couldn't safely
-            // confirm, ...) - fall back to a blank canvas rather than guessing, and tell the
-            // player explicitly instead of silently showing an empty or garbled grid.
+            // The texture manager doesn't have this skin's pixels resident yet (e.g. still
+            // downloading) - fall back to a blank 64x64 canvas, the standard skin size, rather
+            // than guessing at a filesystem path. The player can retry by reopening this screen
+            // once the skin has finished loading, or load a PNG manually.
             skinPixels = new NativeImage(64, 64, true);
-            status = "Could not find your cached skin file - click \"Load Skin PNG...\" to load one.";
+            status = "Your skin isn't loaded yet - click \"Load Skin PNG...\" or reopen this screen in a moment.";
         }
-        fitPixelSize(skinPixels.getWidth(), skinPixels.getHeight());
+        fitPixelSize();
         mask = SkinEmissionMask.load(skinKey, skinPixels.getWidth(), skinPixels.getHeight());
     }
 
     /**
-     * Reads the account's actual skin bytes straight off Minecraft's on-disk skin cache. The
-     * texture bound in the GPU texture manager has no general CPU-side readback path, so the
-     * previous version of this screen gave up and started from a blank canvas; the real pixels
-     * are available, just not through the texture object - {@code SkinManager} downloads every
-     * skin to {@code <gameDirectory>/skins/<hash prefix>/<hash>} and registers it under the
-     * identifier {@code minecraft:skins/<hash>}, so that same relative path re-read from disk is
-     * the account's real, current skin PNG.
-     * <p>
-     * This only trusts the result if BOTH of the following hold, since a wrong guess here
-     * previously produced a screen-sized "skin" (whatever unrelated file happened to exist at a
-     * miscomputed path) that made the whole editor unusable rather than just empty:
-     * <ul>
-     *   <li>the texture's identifier path actually looks like {@code skins/<hash>} - a built-in
-     *       default skin (Steve/Alex) or any other non-downloaded texture uses a different path
-     *       shape entirely and must not be treated as a cache hash;</li>
-     *   <li>the decoded image is exactly 64 wide with a height of 32 or 64 - the only two valid
-     *       Minecraft skin layouts. Anything else (a corrupt read, a hash collision with some
-     *       unrelated cached file) is rejected rather than drawn.</li>
-     * </ul>
+     * Reads the exact pixels the game is currently rendering onto the player's model, straight
+     * from the client's live texture manager - not a guess at where the skin cache lives on disk.
+     * Every skin (the account's own, another player's, capes, elytra) is registered in
+     * {@code TextureManager} under its texture identifier as a {@link DynamicTexture}, which -
+     * unlike most GPU-resident textures - keeps its {@link NativeImage} pixel buffer around on
+     * the CPU side specifically so things like this can read it back
+     * ({@code SkinTextureDownloader.registerTextureInManager}, confirmed by decompiling the real
+     * 26.2 client jar, does exactly this: {@code new DynamicTexture(..., downloadedPixels)}).
+     * Returns a defensive copy (never the live buffer other systems still render from) sized to
+     * whatever that texture's real dimensions are, so the caller never has to assume 64x64.
      */
-    private static NativeImage readSkinFromDiskCache(PlayerSkin skin) {
-        NativeImage image = null;
-        try {
-            String path = skin.body().texturePath().getPath();
-            if (path == null || !path.startsWith("skins/")) {
-                return null;
-            }
-            String hash = path.substring("skins/".length());
-            if (hash.isEmpty() || hash.indexOf('/') >= 0) {
-                return null;
-            }
-            String prefix = hash.length() > 2 ? hash.substring(0, 2) : "xx";
-            Path file = Minecraft.getInstance().gameDirectory.toPath()
-                    .resolve("skins").resolve(prefix).resolve(hash);
-            if (!Files.exists(file)) {
-                return null;
-            }
-            try (InputStream in = Files.newInputStream(file)) {
-                image = NativeImage.read(in);
-            }
-            boolean validLayout = image.getWidth() == 64 && (image.getHeight() == 64 || image.getHeight() == 32);
-            if (!validLayout) {
-                MinimalClientMod.LOGGER.warn("Dressing room: cached skin file at {} had unexpected size {}x{}, ignoring",
-                        file, image.getWidth(), image.getHeight());
-                image.close();
-                return null;
-            }
-            return image;
-        } catch (IOException | RuntimeException e) {
-            if (image != null) {
-                image.close();
-            }
-            MinimalClientMod.LOGGER.warn("Dressing room: could not read cached skin PNG from disk", e);
+    private static NativeImage readActiveSkinPixels(PlayerSkin skin) {
+        AbstractTexture texture = Minecraft.getInstance().getTextureManager().getTexture(skin.body().texturePath());
+        if (!(texture instanceof DynamicTexture dynamic)) {
             return null;
         }
+        NativeImage live = dynamic.getPixels();
+        if (live == null || live.isClosed() || live.getWidth() <= 0 || live.getHeight() <= 0) {
+            return null;
+        }
+        NativeImage copy = new NativeImage(live.getWidth(), live.getHeight(), true);
+        copy.copyFrom(live);
+        return copy;
     }
 
     private void loadFromPicker() {
@@ -248,9 +213,9 @@ public class SkinEditorScreen extends Screen {
             }
             skinPixels = loaded;
             skinKey = file.getFileName().toString();
-            fitPixelSize(skinPixels.getWidth(), skinPixels.getHeight());
+            fitPixelSize();
             mask = SkinEmissionMask.load(skinKey, skinPixels.getWidth(), skinPixels.getHeight());
-            status = "Loaded " + file.getFileName();
+            status = "Loaded " + file.getFileName() + " (" + loaded.getWidth() + "x" + loaded.getHeight() + ")";
             rebuildButtons();
         } catch (IOException e) {
             MinimalClientMod.LOGGER.warn("Dressing room: failed to load skin PNG for editing", e);
@@ -276,25 +241,76 @@ public class SkinEditorScreen extends Screen {
         Minecraft.getInstance().gui.setScreen(returnTo);
     }
 
-    // ---- brushing --------------------------------------------------------------------------
+    // ---- brushing, snapped to whole grid cells ----------------------------------------------
 
-    private void paintAt(double mouseX, double mouseY, boolean erase) {
+    /** Converts a screen-space mouse position to the grid cell under it, or null if the mouse is
+     *  outside the canvas - there is no partial/fractional cell, so a stroke can never land
+     *  "between" pixels. */
+    private int[] cellAt(double mouseX, double mouseY) {
+        int gx = (int) Math.floor((mouseX - canvasX()) / pixelSize);
+        int gy = (int) Math.floor((mouseY - canvasY()) / pixelSize);
+        if (gx < 0 || gy < 0 || gx >= skinPixels.getWidth() || gy >= skinPixels.getHeight()) {
+            return null;
+        }
+        return new int[]{gx, gy};
+    }
+
+    private void paintAt(double mouseX, double mouseY, boolean erase, boolean continuingDrag) {
         if (mask == null) {
             return;
         }
-        double px = (mouseX - canvasX()) / pixelSize;
-        double py = (mouseY - canvasY()) / pixelSize;
-        if (px < -brushRadius || py < -brushRadius || px > mask.width() + brushRadius || py > mask.height() + brushRadius) {
+        int[] cell = cellAt(mouseX, mouseY);
+        if (cell == null) {
             return;
         }
-        mask.brush(px, py, brushRadius, 90, erase);
+        int cx = cell[0];
+        int cy = cell[1];
+        if (continuingDrag && cx == lastPaintCellX && cy == lastPaintCellY) {
+            return;
+        }
+        if (continuingDrag && lastPaintCellX != Integer.MIN_VALUE) {
+            paintLine(lastPaintCellX, lastPaintCellY, cx, cy, erase);
+        } else {
+            mask.brushCell(cx, cy, BRUSH_CELL_RADIUS, erase);
+        }
+        lastPaintCellX = cx;
+        lastPaintCellY = cy;
         dirty = true;
+    }
+
+    /** Fills every whole cell between two grid points (Bresenham) so a fast drag paints a solid
+     *  line of cells instead of leaving gaps between the mouse positions actually reported. */
+    private void paintLine(int x0, int y0, int x1, int y1, boolean erase) {
+        int dx = Math.abs(x1 - x0);
+        int dy = -Math.abs(y1 - y0);
+        int sx = x0 < x1 ? 1 : -1;
+        int sy = y0 < y1 ? 1 : -1;
+        int err = dx + dy;
+        int x = x0;
+        int y = y0;
+        while (true) {
+            mask.brushCell(x, y, BRUSH_CELL_RADIUS, erase);
+            if (x == x1 && y == y1) {
+                break;
+            }
+            int e2 = 2 * err;
+            if (e2 >= dy) {
+                err += dy;
+                x += sx;
+            }
+            if (e2 <= dx) {
+                err += dx;
+                y += sy;
+            }
+        }
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (event.button() == 0 || event.button() == 1) {
-            paintAt(event.x(), event.y(), event.button() == 1);
+            lastPaintCellX = Integer.MIN_VALUE;
+            lastPaintCellY = Integer.MIN_VALUE;
+            paintAt(event.x(), event.y(), event.button() == 1, false);
             return true;
         }
         return super.mouseClicked(event, doubleClick);
@@ -303,7 +319,7 @@ public class SkinEditorScreen extends Screen {
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
         if (event.button() == 0 || event.button() == 1) {
-            paintAt(event.x(), event.y(), event.button() == 1);
+            paintAt(event.x(), event.y(), event.button() == 1, true);
             return true;
         }
         return super.mouseDragged(event, dx, dy);
@@ -325,9 +341,7 @@ public class SkinEditorScreen extends Screen {
         UiRenderer.text(graphics, dirty ? "Unsaved changes" : status, px + PAD, py + PAD + 12,
                 dirty ? 0xFFE0A030 : UiRenderer.TEXT_SECONDARY);
 
-        if (skinPixels != null && mask != null) {
-            drawCanvas(graphics, mouseX, mouseY);
-        }
+        drawCanvas(graphics, mouseX, mouseY);
 
         super.extractRenderState(graphics, mouseX, mouseY, delta);
     }
@@ -350,10 +364,8 @@ public class SkinEditorScreen extends Screen {
                 int color;
                 if (a == 0) {
                     // Transparent atlas cells (unused regions of the skin atlas, e.g. the second
-                    // layer padding) still get a faint checkerboard-free fill so the grid stays
-                    // visible and the player can tell "empty" from "dark but paintable" at a
-                    // glance, instead of the old behaviour of skipping the pixel (and its grid
-                    // line) entirely, which is what made the atlas look wrong/incomplete.
+                    // layer padding) still get a faint fill so the grid stays visible and reads
+                    // as "empty" rather than a hole with no grid line at all.
                     graphics.fill(px1, py1, px1 + pixelSize, py1 + pixelSize, UiRenderer.SETTINGS_PANEL_BG);
                     drawGridCell(graphics, px1, py1);
                     continue;
@@ -370,24 +382,22 @@ public class SkinEditorScreen extends Screen {
             }
         }
 
-        // brush cursor ring, only while hovering the canvas (4 thin bars, not a filled box)
-        double gx = (mouseX - cx) / (double) pixelSize;
-        double gy = (mouseY - cy) / (double) pixelSize;
-        if (gx >= -brushRadius && gy >= -brushRadius && gx <= w + brushRadius && gy <= h + brushRadius) {
-            int rx = cx + (int) Math.round(gx * pixelSize);
-            int ry = cy + (int) Math.round(gy * pixelSize);
-            int r = Math.round(brushRadius * pixelSize);
+        // brush cursor: outline the single grid cell under the mouse, snapped to that cell's own
+        // boundaries rather than following the raw cursor position.
+        int[] hovered = cellAt(mouseX, mouseY);
+        if (hovered != null) {
+            int hx = cx + hovered[0] * pixelSize;
+            int hy = cy + hovered[1] * pixelSize;
             int ring = UiRenderer.withOpacity(UiRenderer.ACCENT);
-            graphics.fill(rx - r, ry - r, rx + r, ry - r + 1, ring);
-            graphics.fill(rx - r, ry + r - 1, rx + r, ry + r, ring);
-            graphics.fill(rx - r, ry - r, rx - r + 1, ry + r, ring);
-            graphics.fill(rx + r - 1, ry - r, rx + r, ry + r, ring);
+            graphics.fill(hx, hy, hx + pixelSize, hy + 1, ring);
+            graphics.fill(hx, hy + pixelSize - 1, hx + pixelSize, hy + pixelSize, ring);
+            graphics.fill(hx, hy, hx + 1, hy + pixelSize, ring);
+            graphics.fill(hx + pixelSize - 1, hy, hx + pixelSize, hy + pixelSize, ring);
         }
     }
 
     /** Draws the right and bottom edge of one pixel cell so the whole canvas ends up with a full
-     *  grid after every cell has drawn its own two edges - this is what the brush was missing
-     *  entirely before, which is why painting looked "free" instead of snapping to skin pixels. */
+     *  grid after every cell has drawn its own two edges. */
     private void drawGridCell(GuiGraphicsExtractor graphics, int cellX, int cellY) {
         graphics.fill(cellX, cellY, cellX + pixelSize, cellY + 1, GRID_LINE_COLOR_LIGHT);
         graphics.fill(cellX, cellY, cellX + 1, cellY + pixelSize, GRID_LINE_COLOR_LIGHT);
