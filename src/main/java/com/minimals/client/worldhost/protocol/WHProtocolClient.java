@@ -139,8 +139,12 @@ public final class WHProtocolClient implements AutoCloseable {
                 onMessage.accept(message);
             }
         } catch (Exception e) {
-            if (!closed && !(e instanceof SocketException)) {
-                WorldHostManager.LOGGER.warn("World Host recv thread stopped", e);
+            if (!closed) {
+                if (e instanceof SocketException) {
+                    WorldHostManager.LOGGER.warn("World Host relay connection reset: {}", e.getMessage());
+                } else {
+                    WorldHostManager.LOGGER.warn("World Host recv thread stopped", e);
+                }
             }
         }
         close();

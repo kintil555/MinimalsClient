@@ -92,7 +92,12 @@ public final class WorldHostManager {
         client = new WHProtocolClient(
                 DEFAULT_HOST, WHProtocolClient.DEFAULT_PORT, user,
                 WorldHostManager::handleMessage,
-                () -> { /* closed: tick() will reconnect */ }
+                () -> {
+                    // Relay socket died (reset/EOF/etc). Any join we were mid-attempt on is now
+                    // pointed at a dead relay session; drop it so a stale OnlineGame can't fire
+                    // ConnectScreen against a proxy port the relay already tore down.
+                    attemptingToJoin = null;
+                }
         );
         client.getConnectedFuture().thenRun(() -> {
             if (client != null) {
