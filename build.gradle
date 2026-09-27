@@ -12,6 +12,7 @@ base {
 repositories {
     mavenCentral()
     maven { url 'https://maven.fabricmc.net/' }
+    maven { url 'https://maven.skye.vg/' } // e4mc (link.e4mc)
     exclusiveContent {
         forRepository {
             maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' }
@@ -25,6 +26,9 @@ dependencies {
     // No mappings line: Loom defaults to Mojang's official mappings on 26.x.
     implementation 'net.fabricmc:fabric-loader:0.19.3'
     implementation 'net.fabricmc.fabric-api:fabric-api:0.157.0+26.2'
+    // e4mc: real P2P (iroh/QUIC) replacing our World Host relay-proxy for game traffic.
+    // World Host relay is kept only for friend presence + ticket delivery (see WorldHostManager).
+    modImplementation "link.e4mc:e4mc_minecraft-fabric:6.2.2"
     // MixinExtras (@WrapOperation etc.) is bundled at runtime by fabric-loader 0.15.0+,
     // so we only need it on the compile classpath here, not packaged into the jar.
     compileOnly 'io.github.llamalad7:mixinextras-fabric:0.5.4'
