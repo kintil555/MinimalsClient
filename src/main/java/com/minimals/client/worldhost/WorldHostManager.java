@@ -201,7 +201,7 @@ public final class WorldHostManager {
                 Minecraft mc = Minecraft.getInstance();
                 ServerData serverData = new ServerData("Friend's world", game.host() + ":" + game.port(), ServerData.Type.OTHER);
                 ConnectScreen.startConnecting(
-                        mc.screen != null ? mc.screen : new TitleScreen(),
+                        mc.gui.screen() != null ? mc.gui.screen() : new TitleScreen(),
                         mc, new ServerAddress(game.host(), game.port()), serverData, false, null
                 );
             }

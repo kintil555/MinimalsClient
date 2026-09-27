@@ -226,7 +226,7 @@ public class WorldHostFriendsScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(returnTo);
+        minecraft.gui.setScreen(returnTo);
     }
 
     @Override
