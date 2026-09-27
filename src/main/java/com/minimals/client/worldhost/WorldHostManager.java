@@ -272,7 +272,11 @@ public final class WorldHostManager {
      */
     public static void connectToFriend(UUID friendUuid) {
         Long connectionId = ONLINE_FRIENDS.get(friendUuid);
-        if (connectionId == null || client == null) return;
+        if (connectionId == null) return;
+        if (client == null) {
+            showToast("Can't join yet", "Still connecting to World Host, try again in a moment.");
+            return;
+        }
         attemptingToJoin = connectionId;
         client.requestDirectJoin(connectionId);
     }
