@@ -229,7 +229,15 @@ public class WorldHostFriendsScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.gui.setScreen(returnTo);
+        // If we left the world (player disconnected/failed to join) while this screen was
+        // open, returnTo may be a stale PauseScreen whose init() reads minecraft.player -
+        // which is now null, causing a NullPointerException crash. Fall back to the title
+        // screen in that case instead of trusting the cached returnTo.
+        if (minecraft.player == null) {
+            minecraft.gui.setScreen(new net.minecraft.client.gui.screens.TitleScreen());
+        } else {
+            minecraft.gui.setScreen(returnTo);
+        }
     }
 
     @Override
