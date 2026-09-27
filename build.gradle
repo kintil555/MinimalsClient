@@ -12,7 +12,6 @@ base {
 repositories {
     mavenCentral()
     maven { url 'https://maven.fabricmc.net/' }
-    maven { url 'https://maven.skye.vg/' } // e4mc (link.e4mc)
     exclusiveContent {
         forRepository {
             maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' }
@@ -28,7 +27,12 @@ dependencies {
     implementation 'net.fabricmc.fabric-api:fabric-api:0.157.0+26.2'
     // e4mc: real P2P (iroh/QUIC) replacing our World Host relay-proxy for game traffic.
     // World Host relay is kept only for friend presence + ticket delivery (see WorldHostManager).
-    implementation "link.e4mc:e4mc_minecraft-fabric:6.2.2"
+    // compileOnly, NOT bundled: e4mc must be installed by the user as its own separate mod
+    // jar in mods/ (standard e4mc distribution) — we only compile against its classes here.
+    // Vendored locally (libs/) for compiling instead of a remote Maven coordinate: e4mc's
+    // actual publish location (Modrinth Maven, group "maven.modrinth") uses opaque per-version
+    // IDs we couldn't confirm for the 26.2 "Fabric Modern" 6.2.2 build; this file is verified correct.
+    compileOnly files('libs/e4mc-fabric-6_2_2-modern.jar')
     // MixinExtras (@WrapOperation etc.) is bundled at runtime by fabric-loader 0.15.0+,
     // so we only need it on the compile classpath here, not packaged into the jar.
     compileOnly 'io.github.llamalad7:mixinextras-fabric:0.5.4'

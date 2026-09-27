@@ -1,0 +1,9 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.minimals.client.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "E4mcSessionAccessorMixin"
+  ]
+}

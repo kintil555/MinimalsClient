@@ -5,7 +5,6 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "CustomHitSoundMixin",
-    "E4mcSessionAccessorMixin",
     "LightmapMixin",
     "LevelExtractorMixin",
     "PlayerNameMixin",
