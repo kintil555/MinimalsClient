@@ -105,6 +105,8 @@ public class MinimalClientMod implements ClientModInitializer {
         // Restore the last session's settings (no-op on first run: default.txt does not exist yet).
         ConfigManager.load(ConfigManager.DEFAULT_NAME);
 
+        com.minimals.client.worldhost.WorldHostManager.init();
+
         HudElementRegistry.attachElementAfter(
                 VanillaHudElements.MISC_OVERLAYS,
                 Identifier.fromNamespaceAndPath(MOD_ID, "minimals_hud"),
@@ -118,6 +120,7 @@ public class MinimalClientMod implements ClientModInitializer {
             // Runs first so the early returns below can never leave the key stuck down.
             tickAutoSprint(client);
             SpectateManager.tick(client);
+            com.minimals.client.worldhost.WorldHostManager.tick();
 
             if (MenuScreen.isTypingInMenu()) {
                 // Drain queued presses so they don't fire the moment the text field loses focus.

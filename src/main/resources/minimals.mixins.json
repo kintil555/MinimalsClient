@@ -28,7 +28,9 @@
     "WidgetHoverSoundMixin",
     "AvatarRendererMixin",
     "PlayerInfoMixin",
-    "LivingEntityRendererAddLayerInvoker"
+    "LivingEntityRendererAddLayerInvoker",
+    "PauseMenuMultiplayerMixin",
+    "WorldHostPublishMixin"
   ],
   "mixins": [
     "PathNavigationMixin"
