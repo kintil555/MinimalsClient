@@ -102,8 +102,11 @@ public class WorldHostFriendsScreen extends Screen {
         if (server.isPublished()) {
             server.unpublishServer();
             status = "World closed.";
+            statusIsError = false;
         } else {
-            boolean ok = server.publishServer(MinecraftServer.MultiplayerScope.LAN, server.getPort() != 0 ? server.getPort() : 25565);
+            int port = server.getPort();
+            if (port <= 0 || port > 65535) port = 25565;
+            boolean ok = server.publishServer(MinecraftServer.MultiplayerScope.LAN, port);
             status = ok ? "World opened to friends." : "Could not open world.";
             statusIsError = !ok;
         }

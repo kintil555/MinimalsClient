@@ -96,6 +96,7 @@ public final class WorldHostManager {
         );
         client.getConnectedFuture().thenRun(() -> {
             if (client != null) {
+                LOGGER.info("Connected to World Host relay {}:{}", DEFAULT_HOST, WHProtocolClient.DEFAULT_PORT);
                 client.listOnline(WorldHostFriends.all());
                 MinecraftServer server = mc.getSingleplayerServer();
                 if (server != null && server.isPublished()) {
@@ -164,6 +165,7 @@ public final class WorldHostManager {
 
     /** Call after IntegratedServer.publishServer(...) succeeds, to announce it to online friends. */
     public static void onWorldPublished() {
+        LOGGER.info("World published, announcing to {} friend(s)", WorldHostFriends.all().size());
         if (client != null) {
             client.publishedWorld(WorldHostFriends.all());
         }
