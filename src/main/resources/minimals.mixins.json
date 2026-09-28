@@ -29,8 +29,8 @@
     "AvatarRendererMixin",
     "PlayerInfoMixin",
     "LivingEntityRendererAddLayerInvoker",
-    "PauseMenuMultiplayerMixin",
-    "WorldHostPublishMixin"
+    "WorldHostPublishMixin",
+    "MultiplayerOptionsScreenMixin"
   ],
   "mixins": [
     "PathNavigationMixin"
