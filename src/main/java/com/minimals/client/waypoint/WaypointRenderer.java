@@ -160,9 +160,12 @@ public final class WaypointRenderer {
         int backdrop = ARGB.multiplyAlpha(BACKDROP, alpha);
 
         graphics.pose().pushMatrix();
-        // Whole pixels only. Icon and text are drawn on an integer grid, so a fractional
-        // translate makes them land on different sub-pixels frame to frame and shimmer.
-        graphics.pose().translate(Math.round(sx), Math.round(sy));
+        // Snap to whole *framebuffer* pixels, not whole GUI pixels. sx/sy are in GUI units, so
+        // at GUI scale 3 rounding to an integer GUI unit moved the marker in 3px jumps (the
+        // "rough" motion). Rounding to 1/guiScale steps keeps the anti-shimmer property (icon
+        // and text stay on the physical pixel grid) but moves in 1px steps.
+        float gs = Math.max(1, Minecraft.getInstance().getWindow().getGuiScale());
+        graphics.pose().translate(Math.round(sx * gs) / gs, Math.round(sy * gs) / gs);
         graphics.pose().scale(scale, scale);
 
         // Icon centred on the projected point.
