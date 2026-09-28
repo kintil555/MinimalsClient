@@ -59,6 +59,9 @@ public class MinimalClientMod implements ClientModInitializer {
         com.minimals.client.sound.MinimalsSounds.init();
         com.minimals.client.worldhost.E4mcJoinUpgrade.init();
         com.minimals.client.worldhost.E4mcMissingNotice.init();
+        // Bound the skin/cape preview cache and delete legacy counter-named leftovers (off-thread).
+        java.util.concurrent.CompletableFuture.runAsync(
+                com.minimals.client.dressing.PreviewTextureLoader::trimDiskCache);
 
         menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.minimals.open_menu",

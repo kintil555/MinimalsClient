@@ -798,6 +798,13 @@ public class DressingRoomScreen extends Screen {
     }
 
     @Override
+    public void removed() {
+        super.removed();
+        // Free the thumbnail/preview textures this screen registered; files stay cached on disk.
+        PreviewTextureLoader.releasePreviews();
+    }
+
+    @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(0, 0, width, height, 0x88000000);
 
