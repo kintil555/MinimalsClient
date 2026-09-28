@@ -137,22 +137,52 @@ public final class SkinEmissionMask {
                         image.setPixel(x, y, (a << 24) | 0xFFFFFF);
                     }
                 }
-                image.writeToFile(dir.resolve(safeName(skinKey) + ".png"));
+                // Write next to the target and move over it: a crash / full disk mid-write can
+                // no longer leave a truncated PNG in place of the user's painted glow.
+                Path target = dir.resolve(safeName(skinKey) + ".png");
+                Path temp = dir.resolve(safeName(skinKey) + ".png.tmp");
+                try {
+                    image.writeToFile(temp);
+                    try {
+                        Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                                java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                    } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                        Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } finally {
+                    Files.deleteIfExists(temp);
+                }
             }
         } catch (IOException e) {
             com.minimals.client.MinimalClientMod.LOGGER.warn("Failed to save emission mask", e);
         }
     }
 
+    /** Largest mask file / edge we will read back. Real skins are 64-256 px and a few KB. */
+    private static final long MAX_MASK_FILE_BYTES = 1024 * 1024;
+    private static final int MAX_MASK_EDGE = 1024;
+
+    /** True when {@code file} is small enough to decode; a corrupt or hostile PNG is skipped. */
+    private static boolean readable(Path file) {
+        try {
+            return Files.isRegularFile(file) && Files.size(file) <= MAX_MASK_FILE_BYTES;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     public static SkinEmissionMask load(String skinKey, int width, int height) {
         Path file = maskDirectory().resolve(safeName(skinKey) + ".png");
         SkinEmissionMask mask = new SkinEmissionMask(width, height);
-        if (!Files.exists(file)) {
+        if (!readable(file)) {
             return mask;
         }
         try (var in = Files.newInputStream(file); NativeImage image = NativeImage.read(in)) {
             int iw = image.getWidth();
             int ih = image.getHeight();
+            if (iw <= 0 || ih <= 0 || iw > MAX_MASK_EDGE || ih > MAX_MASK_EDGE) {
+                return mask;
+            }
             // Same resolution: straight copy. Different (e.g. mask saved on a 64x64 skin, skin is
             // now 128x128): nearest-neighbour rescale so the glow stays on the same body part
             // instead of being cropped or shifted.
@@ -176,10 +206,14 @@ public final class SkinEmissionMask {
      */
     public static SkinEmissionMask loadNative(String skinKey) {
         Path file = maskDirectory().resolve(safeName(skinKey) + ".png");
-        if (!Files.exists(file)) {
+        if (!readable(file)) {
             return null;
         }
         try (var in = Files.newInputStream(file); NativeImage image = NativeImage.read(in)) {
+            if (image.getWidth() <= 0 || image.getHeight() <= 0
+                    || image.getWidth() > MAX_MASK_EDGE || image.getHeight() > MAX_MASK_EDGE) {
+                return null;
+            }
             SkinEmissionMask mask = new SkinEmissionMask(image.getWidth(), image.getHeight());
             for (int y = 0; y < mask.height; y++) {
                 for (int x = 0; x < mask.width; x++) {
@@ -203,7 +237,12 @@ public final class SkinEmissionMask {
     }
 
     private static String safeName(String key) {
-        return key.replaceAll("[^a-zA-Z0-9._-]", "_");
+        String name = key.replaceAll("[^a-zA-Z0-9._-]", "_");
+        if (name.length() <= 100) {
+            return name;
+        }
+        // Keep file names well under the 255-char OS limit; the hash keeps two long keys apart.
+        return name.substring(0, 80) + "-" + Integer.toHexString(key.hashCode());
     }
 
 }

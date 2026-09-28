@@ -18,11 +18,15 @@ public final class AtomicFiles {
     }
 
     public static void writeString(Path target, String content) throws IOException {
+        writeBytes(target, content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static void writeBytes(Path target, byte[] content) throws IOException {
         Path parent = target.toAbsolutePath().getParent();
         Files.createDirectories(parent);
         Path temp = parent.resolve(target.getFileName() + ".tmp");
         try {
-            Files.writeString(temp, content, StandardCharsets.UTF_8);
+            Files.write(temp, content);
             try {
                 Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {

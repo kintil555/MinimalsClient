@@ -119,6 +119,12 @@ public final class WorldHostManager {
 
     /** Resolves a Minecraft username to a UUID via the Mojang API and adds them as a friend. */
     public static void addFriendByName(String username, Runnable onSuccess, java.util.function.Consumer<String> onError) {
+        // Raw text goes into the request path: reject anything that is not a valid name
+        // (slashes, '?', '#', spaces) instead of letting it reshape the URL.
+        if (!com.minimals.client.util.SafeHttp.isValidUsername(username)) {
+            onError.accept("Invalid username.");
+            return;
+        }
         Thread.ofVirtual().name("MinimalsWH-lookup").start(() -> {
             try {
                 HttpRequest request = HttpRequest.newBuilder()

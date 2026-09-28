@@ -60,8 +60,18 @@ public class MinimalClientMod implements ClientModInitializer {
         com.minimals.client.worldhost.E4mcJoinUpgrade.init();
         com.minimals.client.worldhost.E4mcMissingNotice.init();
         // Bound the skin/cape preview cache and delete legacy counter-named leftovers (off-thread).
-        java.util.concurrent.CompletableFuture.runAsync(
-                com.minimals.client.dressing.PreviewTextureLoader::trimDiskCache);
+        // Own short-lived daemon thread instead of the shared ForkJoin common pool (which the
+        // game and other mods rely on), and a failure is logged instead of swallowed silently.
+        Thread trim = new Thread(() -> {
+            try {
+                com.minimals.client.dressing.PreviewTextureLoader.trimDiskCache();
+            } catch (Throwable t) {
+                LOGGER.warn("Preview cache trim failed", t);
+            }
+        }, "minimals-cache-trim");
+        trim.setDaemon(true);
+        trim.setPriority(Thread.MIN_PRIORITY);
+        trim.start();
 
         menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.minimals.open_menu",

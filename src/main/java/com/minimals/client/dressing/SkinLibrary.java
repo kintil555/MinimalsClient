@@ -25,10 +25,7 @@ import java.util.UUID;
  */
 public final class SkinLibrary {
 
-    /** One shared client: creating an HttpClient per call leaks its selector thread. */
-    private static final java.net.http.HttpClient HTTP = java.net.http.HttpClient.newBuilder()
-            .connectTimeout(java.time.Duration.ofSeconds(10)).build();
-    private static final int MAX_SKIN_BYTES = 512 * 1024;
+    private static final int MAX_SKIN_BYTES = com.minimals.client.util.SafeHttp.MAX_TEXTURE_BYTES;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -102,34 +99,21 @@ public final class SkinLibrary {
                                                                               MojangSkinService.Model model) {
         return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
-                java.net.URI uri = java.net.URI.create(textureUrl);
-                // Only Mojang's texture CDN is a legitimate source; refuse anything else so a
-                // crafted profile can never make the client fetch arbitrary hosts.
-                if (!"https".equals(uri.getScheme()) || uri.getHost() == null
-                        || !(uri.getHost().equals("textures.minecraft.net")
-                        || uri.getHost().endsWith(".minecraft.net"))) {
+                // Only Mojang's texture CDN is a legitimate source, and the body is read through a
+                // hard cap while streaming (a chunked response can omit or lie about Content-Length).
+                if (!com.minimals.client.util.SafeHttp.isMojangTextureUrl(textureUrl)) {
                     return null;
                 }
-                var request = java.net.http.HttpRequest.newBuilder(uri)
-                        .timeout(java.time.Duration.ofSeconds(15)).GET().build();
-                var response = HTTP.send(request, info -> {
-                    // Reject before buffering when the server announces an oversized body.
-                    long declared = info.headers().firstValueAsLong("Content-Length").orElse(-1L);
-                    if (info.statusCode() / 100 != 2 || declared > MAX_SKIN_BYTES) {
-                        return java.net.http.HttpResponse.BodySubscribers.replacing(new byte[0]);
-                    }
-                    return java.net.http.HttpResponse.BodySubscribers.ofByteArray();
-                });
-                // A real skin PNG is a few KB; cap so a hostile URL can't fill the user's disk/heap.
-                byte[] body = response.body();
-                if (response.statusCode() / 100 != 2 || body.length == 0 || body.length > MAX_SKIN_BYTES) {
+                byte[] body = com.minimals.client.util.SafeHttp.getCapped(java.net.URI.create(textureUrl),
+                        java.time.Duration.ofSeconds(15), MAX_SKIN_BYTES);
+                if (body == null || body.length == 0) {
                     return null;
                 }
                 Path dir = directory();
                 Files.createDirectories(dir);
                 String id = UUID.randomUUID().toString();
                 String fileName = id + ".png";
-                Files.write(dir.resolve(fileName), body);
+                com.minimals.client.util.AtomicFiles.writeBytes(dir.resolve(fileName), body);
                 Entry entry = new Entry(id, name, model.apiName, fileName);
                 List<Entry> entries = list();
                 entries.add(entry);
@@ -139,7 +123,7 @@ public final class SkinLibrary {
                 MinimalClientMod.LOGGER.warn("Skin library: failed to save fetched skin", e);
                 return null;
             }
-        });
+        }, MojangSkinService.IO);
     }
 
     public static Path pngPath(Entry entry) {

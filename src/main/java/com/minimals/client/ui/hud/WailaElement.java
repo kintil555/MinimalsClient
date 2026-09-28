@@ -170,6 +170,18 @@ public class WailaElement extends HudElement {
 
     private Snapshot last;
 
+    /** Rebuild at most this often (ticks) for the SAME target, so health/effects still refresh
+     *  but the row list, Components and font measuring are not redone every rendered frame. */
+    private static final int REBUILD_TICKS = 5;
+    /** What {@link #last} was built for: the block position+state, or the entity, plus the settings. */
+    private Object cachedTarget;
+    private BlockState cachedState;
+    private int cachedSettingsHash;
+    private long cachedAtTick = Long.MIN_VALUE;
+    /** Measured once: font metrics and the sample rows never change while the game runs. */
+    private static Snapshot cachedSample;
+    private static Font cachedSampleFont;
+
     public WailaElement() {
         super("waila", "WAILA", 0.5f, 0.02f);
     }
@@ -277,7 +289,12 @@ public class WailaElement extends HudElement {
 
     /** Measured sample, so the editor's drag box matches exactly what drawPlaceholder draws. */
     private static Snapshot sampleSnapshot() {
-        return measure(Minecraft.getInstance().font, ItemStack.EMPTY, SAMPLE_LINES);
+        Font font = Minecraft.getInstance().font;
+        if (cachedSample == null || cachedSampleFont != font) {
+            cachedSample = measure(font, ItemStack.EMPTY, SAMPLE_LINES);
+            cachedSampleFont = font;
+        }
+        return cachedSample;
     }
 
     private static void drawPlaceholder(GuiGraphicsExtractor graphics, Font font, int x, int y) {
@@ -365,12 +382,38 @@ public class WailaElement extends HudElement {
         // While the HUD editor is open the box must not flicker between whatever is behind it;
         // show the fixed placeholder so it is easy to grab and position.
         if (mc.gui.screen() instanceof HudEditorScreen) {
-            last = null;
+            invalidateCache();
             return null;
         }
         if (player == null || level == null || hit == null) {
-            last = null;
+            invalidateCache();
             return null;
+        }
+
+        // Cheap identity of what the crosshair is on. Same target + same settings + fresh enough
+        // = reuse the snapshot (range is re-checked every frame, it is just two distance tests).
+        Object target;
+        BlockState state = null;
+        switch (hit.getType()) {
+            case BLOCK -> {
+                BlockPos pos = ((BlockHitResult) hit).getBlockPos();
+                target = pos.immutable();
+                state = level.getBlockState(pos);
+            }
+            case ENTITY -> target = ((EntityHitResult) hit).getEntity();
+            default -> target = null;
+        }
+        if (target == null) {
+            invalidateCache();
+            return null;
+        }
+
+        long now = level.getGameTime();
+        int settings = settingsHash();
+        boolean fresh = target.equals(cachedTarget) && state == cachedState && settings == cachedSettingsHash
+                && now - cachedAtTick < REBUILD_TICKS && now >= cachedAtTick;
+        if (fresh && last != null) {
+            return inRange(player, hit) ? last : null;
         }
 
         Snapshot snap = switch (hit.getType()) {
@@ -379,7 +422,51 @@ public class WailaElement extends HudElement {
             case MISS -> null;
         };
         last = snap;
+        if (snap == null) {
+            // Out of range / invisible: keep no stale rows, but remember nothing so the next
+            // frame re-evaluates (cheap: the early-outs in snapshot* run before any building).
+            cachedTarget = null;
+            cachedState = null;
+        } else {
+            cachedTarget = target;
+            cachedState = state;
+            cachedSettingsHash = settings;
+            cachedAtTick = now;
+        }
         return snap;
+    }
+
+    private void invalidateCache() {
+        last = null;
+        cachedTarget = null;
+        cachedState = null;
+        cachedAtTick = Long.MIN_VALUE;
+    }
+
+    private static boolean inRange(LocalPlayer player, HitResult hit) {
+        return switch (hit.getType()) {
+            case BLOCK -> player.isWithinBlockInteractionRange(((BlockHitResult) hit).getBlockPos(), 0.0);
+            case ENTITY -> {
+                Entity e = ((EntityHitResult) hit).getEntity();
+                yield e != null && !e.isInvisibleTo(player) && player.isWithinEntityInteractionRange(e, 0.0);
+            }
+            case MISS -> false;
+        };
+    }
+
+    /** Any setting that changes which rows exist or what colour they are, so toggling one in the menu applies at once. */
+    private static int settingsHash() {
+        WailaModule m = module();
+        int h = 1;
+        h = 31 * h + (m.showIcon.get() ? 1 : 0);
+        h = 31 * h + (m.showHealth.get() ? 1 : 0);
+        h = 31 * h + (m.showEffects.get() ? 1 : 0);
+        h = 31 * h + (m.showModName.get() ? 1 : 0);
+        h = 31 * h + (m.showBlockDetails.get() ? 1 : 0);
+        h = 31 * h + m.maxEffects.get();
+        h = 31 * h + m.titleColor.get();
+        h = 31 * h + m.infoColor.get();
+        return h;
     }
 
     private static Snapshot snapshotBlock(Minecraft mc, LocalPlayer player, ClientLevel level, BlockHitResult hit) {

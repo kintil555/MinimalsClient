@@ -35,7 +35,7 @@ public final class MojangSkinService {
     private static final String SESSION_PROFILE_ENDPOINT = "https://sessionserver.mojang.com/session/minecraft/profile/";
     /** Bounded pool (max 4 threads, idle ones exit after 30s) so a burst of clicks or a hung
      *  network can never spawn an unbounded number of threads. */
-    private static final Executor IO = createIoPool();
+    static final Executor IO = createIoPool();
 
     private static Executor createIoPool() {
         java.util.concurrent.ThreadPoolExecutor pool = new java.util.concurrent.ThreadPoolExecutor(
@@ -47,9 +47,7 @@ public final class MojangSkinService {
         });
         return pool;
     }
-    private static final HttpClient CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+    private static final HttpClient CLIENT = com.minimals.client.util.SafeHttp.CLIENT;
 
     private MojangSkinService() {
     }
@@ -310,7 +308,7 @@ public final class MojangSkinService {
             try {
                 // Minecraft names are 3-16 chars of [A-Za-z0-9_]; anything else could inject
                 // path/query parts into the request URL.
-                if (username == null || !username.matches("[A-Za-z0-9_]{1,16}")) {
+                if (!com.minimals.client.util.SafeHttp.isValidUsername(username)) {
                     return null;
                 }
                 HttpRequest lookup = HttpRequest.newBuilder(URI.create(UUID_LOOKUP_ENDPOINT + username))
@@ -339,11 +337,15 @@ public final class MojangSkinService {
                     if (!"textures".equals(o.get("name").getAsString())) {
                         continue;
                     }
-                    String decoded = new String(java.util.Base64.getDecoder().decode(o.get("value").getAsString()));
+                    String decoded = new String(java.util.Base64.getDecoder().decode(o.get("value").getAsString()),
+                            java.nio.charset.StandardCharsets.UTF_8);
                     var texRoot = com.google.gson.JsonParser.parseString(decoded).getAsJsonObject();
                     var textures = texRoot.getAsJsonObject("textures");
                     if (textures != null && textures.has("SKIN")) {
                         String url = textures.getAsJsonObject("SKIN").get("url").getAsString();
+                        if (!com.minimals.client.util.SafeHttp.isMojangTextureUrl(url)) {
+                            return null;
+                        }
                         return new FetchedSkin(username, url);
                     }
                 }
@@ -367,15 +369,16 @@ public final class MojangSkinService {
                 return Result.fail("Not logged in to a Microsoft/Mojang account.");
             }
             try {
-                HttpRequest textureReq = HttpRequest.newBuilder(URI.create(skin.textureUrl()))
-                        .timeout(Duration.ofSeconds(15))
-                        .GET()
-                        .build();
-                HttpResponse<byte[]> textureResp = CLIENT.send(textureReq, HttpResponse.BodyHandlers.ofByteArray());
-                if (textureResp.statusCode() / 100 != 2) {
+                // The URL comes from a third-party JSON response: only Mojang's texture CDN is
+                // allowed, and the body is read through a hard cap (no OOM from a hostile host).
+                if (!com.minimals.client.util.SafeHttp.isMojangTextureUrl(skin.textureUrl())) {
+                    return Result.fail("Refused: skin texture is not hosted by Mojang.");
+                }
+                byte[] bytes = com.minimals.client.util.SafeHttp.getCapped(URI.create(skin.textureUrl()),
+                        Duration.ofSeconds(15), com.minimals.client.util.SafeHttp.MAX_TEXTURE_BYTES);
+                if (bytes == null || bytes.length == 0) {
                     return Result.fail("Could not download that player's skin texture.");
                 }
-                byte[] bytes = textureResp.body();
                 String boundary = "MinimalsDressing" + UUID.randomUUID();
                 byte[] body = buildMultipart(boundary, model.apiName, skin.username() + ".png", bytes);
 
