@@ -58,6 +58,7 @@ public class MinimalClientMod implements ClientModInitializer {
         // Registers the menu-open / button-hover SoundEvents (must happen during init).
         com.minimals.client.sound.MinimalsSounds.init();
         com.minimals.client.worldhost.E4mcJoinUpgrade.init();
+        com.minimals.client.worldhost.E4mcMissingNotice.init();
 
         menuKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.minimals.open_menu",
