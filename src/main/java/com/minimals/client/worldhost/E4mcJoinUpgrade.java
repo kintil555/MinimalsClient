@@ -52,7 +52,7 @@ public final class E4mcJoinUpgrade {
         Minecraft mc = Minecraft.getInstance();
         ServerAddress address;
         try {
-            address = ServerAddress.parse(domain);
+            address = ServerAddress.parseString(domain);
         } catch (Exception e) {
             // Malformed domain (e4mc protocol drifted, etc): stay on the relay connection.
             return;
