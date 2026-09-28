@@ -118,8 +118,8 @@ public final class ConfigManager {
         }
 
         try {
-            Files.createDirectories(directory());
-            Files.write(directory().resolve(safe + EXTENSION), lines, StandardCharsets.UTF_8);
+            com.minimals.client.util.AtomicFiles.writeString(
+                    directory().resolve(safe + EXTENSION), String.join("\n", lines) + "\n");
             currentName = safe;
             return true;
         } catch (IOException e) {

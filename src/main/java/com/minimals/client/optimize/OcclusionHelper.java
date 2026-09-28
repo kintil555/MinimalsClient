@@ -30,7 +30,9 @@ public final class OcclusionHelper {
 
     private static final Map<Integer, Entry> ENTITY_CACHE = new HashMap<>();
     private static final Map<Long, Entry> BLOCK_CACHE = new HashMap<>();
-    private static Level cachedLevel;
+    /** Weak: a strong static ref pinned the whole previous ClientLevel (chunks, entities) in RAM after disconnect. */
+    private static java.lang.ref.WeakReference<Level> cachedLevel = new java.lang.ref.WeakReference<>(null);
+    private static long lastSweep;
 
     private OcclusionHelper() {
     }
@@ -42,11 +44,23 @@ public final class OcclusionHelper {
 
     /** Drops the cache when the player changes world/dimension. */
     private static void validateLevel(Level level) {
-        if (cachedLevel != level) {
-            cachedLevel = level;
+        if (cachedLevel.get() != level) {
+            cachedLevel = new java.lang.ref.WeakReference<>(level);
             ENTITY_CACHE.clear();
             BLOCK_CACHE.clear();
         }
+        sweepIfDue();
+    }
+
+    /** Every few seconds drop entries nobody has asked about recently (despawned mobs, unloaded chunks). */
+    private static void sweepIfDue() {
+        long now = System.currentTimeMillis();
+        if (now - lastSweep < 5000L) {
+            return;
+        }
+        lastSweep = now;
+        ENTITY_CACHE.values().removeIf(e -> now - e.stamp > 2000L);
+        BLOCK_CACHE.values().removeIf(e -> now - e.stamp > 2000L);
     }
 
     /**
@@ -65,9 +79,14 @@ public final class OcclusionHelper {
      * horizontal corners so a mob peeking around a wall is not culled.
      */
     public static boolean isEntityVisible(Entity entity, Level level, Vec3 camera) {
+        return isEntityVisible(entity, level, camera.x, camera.y, camera.z);
+    }
+
+    /** Allocation-free fast path: a Vec3 is only built on a cache miss (most frames are hits). */
+    public static boolean isEntityVisible(Entity entity, Level level, double camX, double camY, double camZ) {
         validateLevel(level);
 
-        if (entity.distanceToSqr(camera.x, camera.y, camera.z) < IMMUNITY_DISTANCE_SQR) {
+        if (entity.distanceToSqr(camX, camY, camZ) < IMMUNITY_DISTANCE_SQR) {
             return true;
         }
 
@@ -78,6 +97,7 @@ public final class OcclusionHelper {
             return entry.visible;
         }
 
+        Vec3 camera = new Vec3(camX, camY, camZ);
         AABB box = entity.getBoundingBox();
         double midX = (box.minX + box.maxX) * 0.5;
         double midY = (box.minY + box.maxY) * 0.5;
@@ -97,7 +117,7 @@ public final class OcclusionHelper {
         entry.stamp = now;
         entry.visible = visible;
 
-        if (ENTITY_CACHE.size() > 4096) {
+        if (ENTITY_CACHE.size() > 16384) {
             ENTITY_CACHE.clear();
         }
         return visible;
@@ -138,7 +158,7 @@ public final class OcclusionHelper {
         entry.stamp = now;
         entry.visible = visible;
 
-        if (BLOCK_CACHE.size() > 8192) {
+        if (BLOCK_CACHE.size() > 32768) {
             BLOCK_CACHE.clear();
         }
         return visible;

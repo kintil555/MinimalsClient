@@ -8,7 +8,6 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -40,7 +39,7 @@ public class EntityCullingMixin {
             return;
         }
 
-        if (!OcclusionHelper.isEntityVisible(entity, level, new Vec3(camX, camY, camZ))) {
+        if (!OcclusionHelper.isEntityVisible(entity, level, camX, camY, camZ)) {
             cir.setReturnValue(false);
         }
     }

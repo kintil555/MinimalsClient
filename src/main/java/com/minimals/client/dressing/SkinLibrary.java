@@ -25,6 +25,11 @@ import java.util.UUID;
  */
 public final class SkinLibrary {
 
+    /** One shared client: creating an HttpClient per call leaks its selector thread. */
+    private static final java.net.http.HttpClient HTTP = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(10)).build();
+    private static final int MAX_SKIN_BYTES = 512 * 1024;
+
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     /** One saved skin: a display name, the model it was saved with, and where its PNG lives. */
@@ -64,11 +69,7 @@ public final class SkinLibrary {
 
     private static void writeIndex(List<Entry> entries) {
         try {
-            Path dir = directory();
-            Files.createDirectories(dir);
-            try (Writer writer = Files.newBufferedWriter(indexFile(), StandardCharsets.UTF_8)) {
-                GSON.toJson(new Index(entries), writer);
-            }
+            com.minimals.client.util.AtomicFiles.writeString(indexFile(), GSON.toJson(new Index(entries)));
         } catch (IOException e) {
             MinimalClientMod.LOGGER.warn("Skin library: failed to write index", e);
         }
@@ -101,19 +102,34 @@ public final class SkinLibrary {
                                                                               MojangSkinService.Model model) {
         return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             try {
-                var client = java.net.http.HttpClient.newBuilder()
-                        .connectTimeout(java.time.Duration.ofSeconds(10)).build();
-                var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(textureUrl))
+                java.net.URI uri = java.net.URI.create(textureUrl);
+                // Only Mojang's texture CDN is a legitimate source; refuse anything else so a
+                // crafted profile can never make the client fetch arbitrary hosts.
+                if (!"https".equals(uri.getScheme()) || uri.getHost() == null
+                        || !(uri.getHost().equals("textures.minecraft.net")
+                        || uri.getHost().endsWith(".minecraft.net"))) {
+                    return null;
+                }
+                var request = java.net.http.HttpRequest.newBuilder(uri)
                         .timeout(java.time.Duration.ofSeconds(15)).GET().build();
-                var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray());
-                if (response.statusCode() / 100 != 2) {
+                var response = HTTP.send(request, info -> {
+                    // Reject before buffering when the server announces an oversized body.
+                    long declared = info.headers().firstValueAsLong("Content-Length").orElse(-1L);
+                    if (info.statusCode() / 100 != 2 || declared > MAX_SKIN_BYTES) {
+                        return java.net.http.HttpResponse.BodySubscribers.replacing(new byte[0]);
+                    }
+                    return java.net.http.HttpResponse.BodySubscribers.ofByteArray();
+                });
+                // A real skin PNG is a few KB; cap so a hostile URL can't fill the user's disk/heap.
+                byte[] body = response.body();
+                if (response.statusCode() / 100 != 2 || body.length == 0 || body.length > MAX_SKIN_BYTES) {
                     return null;
                 }
                 Path dir = directory();
                 Files.createDirectories(dir);
                 String id = UUID.randomUUID().toString();
                 String fileName = id + ".png";
-                Files.write(dir.resolve(fileName), response.body());
+                Files.write(dir.resolve(fileName), body);
                 Entry entry = new Entry(id, name, model.apiName, fileName);
                 List<Entry> entries = list();
                 entries.add(entry);

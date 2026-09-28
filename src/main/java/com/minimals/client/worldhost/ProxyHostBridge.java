@@ -97,6 +97,7 @@ public final class ProxyHostBridge {
     /** One relayed connection: a local Netty channel into the integrated server's memory listener. */
     private final class RelayedClient extends SimpleChannelInboundHandler<ByteBuf> {
         private static final int MAX_PACKET = 0xFFFF;
+        private static final int MAX_PRE_ACTIVE_BYTES = 1 << 20;
 
         private final long connectionId;
         private ByteArrayOutputStream preActiveBuffer = new ByteArrayOutputStream();
@@ -157,6 +158,12 @@ public final class ProxyHostBridge {
         synchronized void sendToServer(byte[] data) {
             if (closed) return;
             if (channel == null) {
+                // Pre-connect data is tiny in practice (login handshake). Bound it so a peer that
+                // keeps sending while the local channel never activates can't grow it forever.
+                if (preActiveBuffer == null || preActiveBuffer.size() + data.length > MAX_PRE_ACTIVE_BYTES) {
+                    closeLocal();
+                    return;
+                }
                 preActiveBuffer.writeBytes(data);
                 return;
             }

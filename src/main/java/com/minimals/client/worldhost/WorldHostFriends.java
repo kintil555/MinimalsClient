@@ -62,8 +62,7 @@ public final class WorldHostFriends {
         }
         sb.append("}\n");
         try {
-            Files.createDirectories(FILE.getParent());
-            Files.writeString(FILE, sb.toString(), StandardCharsets.UTF_8);
+            com.minimals.client.util.AtomicFiles.writeString(FILE, sb.toString());
         } catch (IOException e) {
             WorldHostManager.LOGGER.warn("Could not save world-host-friends.json", e);
         }

@@ -33,11 +33,20 @@ public final class MojangSkinService {
     private static final String OWN_PROFILE_ENDPOINT = "https://api.minecraftservices.com/minecraft/profile";
     private static final String UUID_LOOKUP_ENDPOINT = "https://api.mojang.com/users/profiles/minecraft/";
     private static final String SESSION_PROFILE_ENDPOINT = "https://sessionserver.mojang.com/session/minecraft/profile/";
-    private static final Executor IO = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "minimals-skin-service");
-        t.setDaemon(true);
-        return t;
-    });
+    /** Bounded pool (max 4 threads, idle ones exit after 30s) so a burst of clicks or a hung
+     *  network can never spawn an unbounded number of threads. */
+    private static final Executor IO = createIoPool();
+
+    private static Executor createIoPool() {
+        java.util.concurrent.ThreadPoolExecutor pool = new java.util.concurrent.ThreadPoolExecutor(
+                0, 4, 30L, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.LinkedBlockingQueue<>(64), r -> {
+            Thread t = new Thread(r, "minimals-skin-service");
+            t.setDaemon(true);
+            return t;
+        });
+        return pool;
+    }
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -299,6 +308,11 @@ public final class MojangSkinService {
     public static CompletableFuture<FetchedSkin> fetchSkinByUsername(String username) {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                // Minecraft names are 3-16 chars of [A-Za-z0-9_]; anything else could inject
+                // path/query parts into the request URL.
+                if (username == null || !username.matches("[A-Za-z0-9_]{1,16}")) {
+                    return null;
+                }
                 HttpRequest lookup = HttpRequest.newBuilder(URI.create(UUID_LOOKUP_ENDPOINT + username))
                         .timeout(Duration.ofSeconds(10))
                         .GET()

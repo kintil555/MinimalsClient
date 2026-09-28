@@ -37,13 +37,17 @@ public final class WHProtocolClient implements AutoCloseable {
     public static final int PROTOCOL_VERSION = 7;
     private static final int KEY_PREFIX = 0xFAFA0000;
     public static final int DEFAULT_PORT = 9646;
+    private static final int MAX_MESSAGE_BYTES = 1 << 20; // 1 MiB
+    private static final int CONNECT_TIMEOUT_MS = 10_000;
+    private static final int HANDSHAKE_TIMEOUT_MS = 15_000;
+    private static final int SEND_QUEUE_LIMIT = 4096;
 
     private final String host;
     private final int port;
     private final Consumer<WHS2CMessage> onMessage;
     private final Runnable onClose;
 
-    private final BlockingQueue<Optional<WHC2SMessage>> sendQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<Optional<WHC2SMessage>> sendQueue = new LinkedBlockingQueue<>(SEND_QUEUE_LIMIT);
     private final CompletableFuture<Void> connectedFuture = new CompletableFuture<>();
     private final CompletableFuture<Void> shutdownFuture = new CompletableFuture<>();
 
@@ -67,8 +71,13 @@ public final class WHProtocolClient implements AutoCloseable {
         Cipher decryptCipher;
         Cipher encryptCipher;
         try {
-            socket = new Socket(host, port);
+            socket = new Socket();
+            socket.connect(new java.net.InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
+            // Bound the handshake reads; cleared afterwards because the relay is idle for long stretches.
+            socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
             SecretKey secretKey = performHandshake(socket, user, connectionId);
+            socket.setSoTimeout(0);
+            socket.setKeepAlive(true);
             decryptCipher = Crypt.getCipher(Cipher.DECRYPT_MODE, secretKey);
             encryptCipher = Crypt.getCipher(Cipher.ENCRYPT_MODE, secretKey);
         } catch (Exception e) {
@@ -119,6 +128,11 @@ public final class WHProtocolClient implements AutoCloseable {
             while (!closed) {
                 int length = dis.readInt() - 1;
                 if (length < 0) continue;
+                if (length > MAX_MESSAGE_BYTES) {
+                    // A relay never legitimately sends this much; a corrupt/hostile length would
+                    // otherwise allocate up to 2 GB and crash the game with OutOfMemoryError.
+                    throw new java.io.IOException("World Host message too large: " + length);
+                }
                 int typeId = dis.readUnsignedByte();
                 byte[] body = new byte[length];
                 dis.readFully(body);
@@ -197,10 +211,11 @@ public final class WHProtocolClient implements AutoCloseable {
 
     private void enqueue(WHC2SMessage message) {
         if (closed) return;
-        try {
-            sendQueue.put(Optional.of(message));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        // offer(), not put(): enqueue is called from the game thread, and a stalled socket must
+        // drop messages / tear down instead of freezing the whole client on a full queue.
+        if (!sendQueue.offer(Optional.of(message))) {
+            WorldHostManager.LOGGER.warn("World Host send queue full, closing connection");
+            close();
         }
     }
 
@@ -269,6 +284,7 @@ public final class WHProtocolClient implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
-        sendQueue.add(Optional.empty());
+        sendQueue.clear();
+        sendQueue.offer(Optional.empty());
     }
 }

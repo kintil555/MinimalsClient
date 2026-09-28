@@ -70,10 +70,7 @@ public final class PresetManager {
 
     private static void writeIndex(List<Preset> presets) {
         try {
-            Files.createDirectories(directory());
-            try (Writer writer = Files.newBufferedWriter(indexFile(), StandardCharsets.UTF_8)) {
-                GSON.toJson(new Index(presets), writer);
-            }
+            com.minimals.client.util.AtomicFiles.writeString(indexFile(), GSON.toJson(new Index(presets)));
         } catch (IOException e) {
             MinimalClientMod.LOGGER.warn("Presets: failed to write index", e);
         }

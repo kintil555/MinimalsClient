@@ -9,6 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,13 +28,30 @@ public class ArraylistElement extends HudElement {
         super("arraylist", "Arraylist", 0.01f, 0.01f);
     }
 
+    /** Reused every frame: the old stream().toList() built a new list up to 3x per frame. */
+    private final List<Module> scratch = new ArrayList<>();
+
     private List<Module> activeModules() {
-        return ModuleManager.getAllModules().stream().filter(Module::isEnabled).toList();
+        scratch.clear();
+        for (Module module : ModuleManager.getAllModules()) {
+            if (module.isEnabled()) {
+                scratch.add(module);
+            }
+        }
+        return scratch;
     }
 
     @Override
     public boolean isActive() {
-        return ClientSettings.ARRAYLIST.get() && !activeModules().isEmpty();
+        if (!ClientSettings.ARRAYLIST.get()) {
+            return false;
+        }
+        for (Module module : ModuleManager.getAllModules()) {
+            if (module.isEnabled()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
