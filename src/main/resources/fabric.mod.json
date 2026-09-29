@@ -30,6 +30,9 @@
   "jars": [
     {
       "file": "META-INF/jars/e4mc-fabric-6_2_2-modern.jar"
+    },
+    {
+      "file": "META-INF/jars/cpm-fabric-26_2-0_6_27c.jar"
     }
   ]
 }

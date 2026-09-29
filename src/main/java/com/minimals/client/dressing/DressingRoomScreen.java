@@ -27,7 +27,7 @@ import java.util.function.Supplier;
  */
 public class DressingRoomScreen extends Screen {
 
-    private enum Tab { SKIN, CAPE, PRESETS, EMISSION }
+    private enum Tab { SKIN, CAPE, PRESETS, EMISSION, CUSTOMIZE }
 
     // +20% over the original 420x300 / 140 preview.
     private static final int PANEL_W = 504;
@@ -126,11 +126,12 @@ public class DressingRoomScreen extends Screen {
         addRenderableWidget(previewWidget);
 
         int tabX = px + PAD + PREVIEW_W + PAD;
-        int tabW = (PANEL_W - PAD * 3 - PREVIEW_W - 18) / 4;
+        int tabW = (PANEL_W - PAD * 3 - PREVIEW_W - 24) / 5;
         addRenderableWidget(tabButton("Skin", Tab.SKIN, tabX, py + PAD + 30, tabW));
         addRenderableWidget(tabButton("Cape", Tab.CAPE, tabX + (tabW + 6), py + PAD + 30, tabW));
         addRenderableWidget(tabButton("Presets", Tab.PRESETS, tabX + (tabW + 6) * 2, py + PAD + 30, tabW));
         addRenderableWidget(tabButton("Emission", Tab.EMISSION, tabX + (tabW + 6) * 3, py + PAD + 30, tabW));
+        addRenderableWidget(tabButton("Customize", Tab.CUSTOMIZE, tabX + (tabW + 6) * 4, py + PAD + 30, tabW));
 
         int contentX = tabX;
         int contentY = py + PAD + 30 + TAB_H + 10;
@@ -141,6 +142,7 @@ public class DressingRoomScreen extends Screen {
             case CAPE -> initCapeTab(contentX, contentY, contentW);
             case PRESETS -> initPresetsTab(contentX, contentY, contentW);
             case EMISSION -> initEmissionTab(contentX, contentY, contentW);
+            case CUSTOMIZE -> initCustomizeTab(contentX, contentY, contentW);
         }
     }
 
@@ -727,6 +729,20 @@ public class DressingRoomScreen extends Screen {
                 .build());
     }
 
+    // ---- Customize tab -------------------------------------------------------------------
+
+    /** Foundation only: both buttons hand off to the bundled CPM screens (see CustomizePlayerBridge). */
+    private void initCustomizeTab(int x, int y, int w) {
+        addRenderableWidget(Button.builder(Component.literal("Open Model Editor"), btn ->
+                        CustomizePlayerBridge.openEditor(this))
+                .bounds(x, y, w, 20)
+                .build());
+        addRenderableWidget(Button.builder(Component.literal("Browse Models"), btn ->
+                        CustomizePlayerBridge.openModels(this))
+                .bounds(x, y + 26, w, 20)
+                .build());
+    }
+
     private void clearMask() {
         String key = skinKey();
         SkinEmissionMask.delete(key);
@@ -831,6 +847,13 @@ public class DressingRoomScreen extends Screen {
         DropdownWidget open = openDropdown();
         if (open != null) {
             open.extractRenderState(graphics, mouseX, mouseY, delta);
+        }
+
+        if (tab == Tab.CUSTOMIZE) {
+            int cx = px + PAD + PREVIEW_W + PAD;
+            int cy = py + PAD + 30 + TAB_H + 10 + 58;
+            UiRenderer.text(graphics, "Edit your player's model, textures and animations.", cx, cy, UiRenderer.TEXT_SECONDARY);
+            UiRenderer.text(graphics, "Powered by Customizable Player Models (MIT).", cx, cy + 12, UiRenderer.TEXT_SECONDARY);
         }
 
         if (!status.isEmpty()) {

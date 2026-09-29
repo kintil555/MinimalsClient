@@ -28,6 +28,9 @@ dependencies {
     // e4mc (MIT, by Skye) is compiled against here and bundled as a nested jar (see processResources)
     // so players don't need to install it. Vendored in libs/ (verified 6.2.2 Fabric Modern build).
     compileOnly files('libs/e4mc-fabric-6_2_2-modern.jar')
+    // Customizable Player Models (MIT, by tom5454) powers the Dressing Room "Customize" tab.
+    // Compiled against here and bundled as a nested jar (see processResources), same as e4mc.
+    compileOnly files('libs/cpm-fabric-26_2-0_6_27c.jar')
     // MixinExtras (@WrapOperation etc.) is bundled at runtime by fabric-loader 0.15.0+,
     // so we only need it on the compile classpath here, not packaged into the jar.
     compileOnly 'io.github.llamalad7:mixinextras-fabric:0.5.4'
@@ -57,7 +60,13 @@ processResources {
     from('libs/e4mc-fabric-6_2_2-modern.jar') {
         into 'META-INF/jars'
     }
+    from('libs/cpm-fabric-26_2-0_6_27c.jar') {
+        into 'META-INF/jars'
+    }
     from('libs/E4MC-LICENSE.txt') {
+        into 'META-INF'
+    }
+    from('libs/CPM-LICENSE.txt') {
         into 'META-INF'
     }
 }
