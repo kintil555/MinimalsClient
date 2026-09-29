@@ -9,23 +9,17 @@ import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.social.PlayerSocialManager;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Orchestrates the "friend join world" feature: connects to a World Host-compatible
@@ -48,10 +42,13 @@ public final class WorldHostManager {
     /** Friends currently known to be online in a joinable world: UUID -> their connection id. */
     private static final Map<UUID, Long> ONLINE_FRIENDS = new LinkedHashMap<>();
 
-    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .build();
-    private static final Pattern UUID_FIELD = Pattern.compile("\"id\"\\s*:\\s*\"([0-9a-fA-F]{32})\"");
+    /** How the world is being shared. LAN = vanilla only; MULTIPLAYER = also announced to friends. */
+    public enum Mode { LAN, MULTIPLAYER }
+
+    /** Set by OpenWorldScreen right before publishServer(); consumed by onWorldPublished(). */
+    private static Mode pendingMode = Mode.LAN;
+    private static boolean multiplayerActive;
+    private static boolean friendListenerRegistered;
 
     private static int reconnectDelayTicks;
     private static boolean initialized;
@@ -66,11 +63,40 @@ public final class WorldHostManager {
     public static void init() {
         if (initialized) return;
         initialized = true;
-        WorldHostFriends.load();
+    }
+
+    public static void setPendingMode(Mode mode) {
+        pendingMode = mode;
+    }
+
+    /** True while the current integrated server is shared to friends through the relay. */
+    public static boolean isMultiplayerActive() {
+        return multiplayerActive;
+    }
+
+    private static void onFriendListChanged() {
+        Minecraft.getInstance().execute(() -> {
+            ONLINE_FRIENDS.keySet().removeIf(id -> !WorldHostFriends.isFriend(id));
+            if (client == null || client.isClosed()) return;
+            client.listOnline(WorldHostFriends.all());
+            if (multiplayerActive) {
+                client.publishedWorld(WorldHostFriends.all());
+            }
+        });
     }
 
     public static void tick() {
         if (!initialized) return;
+        if (!friendListenerRegistered) {
+            PlayerSocialManager social = Minecraft.getInstance().getPlayerSocialManager();
+            if (social != null) {
+                social.addFriendListUpdateListener(WorldHostManager::onFriendListChanged);
+                friendListenerRegistered = true;
+            }
+        }
+        if (multiplayerActive && Minecraft.getInstance().getSingleplayerServer() == null) {
+            onWorldUnpublished(); // left the world without an unpublish callback
+        }
         if (client == null || client.isClosed()) {
             client = null;
             if (reconnectDelayTicks > 0) {
@@ -103,8 +129,10 @@ public final class WorldHostManager {
             if (client != null) {
                 LOGGER.info("Connected to World Host relay {}:{}", DEFAULT_HOST, WHProtocolClient.DEFAULT_PORT);
                 client.listOnline(WorldHostFriends.all());
-                MinecraftServer server = mc.getSingleplayerServer();
-                if (server != null && server.isPublished()) {
+                if (hostBridge != null) {
+                    hostBridge.rebind(client);
+                }
+                if (multiplayerActive) {
                     client.publishedWorld(WorldHostFriends.all());
                 }
             }
@@ -115,58 +143,7 @@ public final class WorldHostManager {
         return client != null && !client.isClosed();
     }
 
-    // --- friend management -------------------------------------------------
-
-    /** Resolves a Minecraft username to a UUID via the Mojang API and adds them as a friend. */
-    public static void addFriendByName(String username, Runnable onSuccess, java.util.function.Consumer<String> onError) {
-        // Raw text goes into the request path: reject anything that is not a valid name
-        // (slashes, '?', '#', spaces) instead of letting it reshape the URL.
-        if (!com.minimals.client.util.SafeHttp.isValidUsername(username)) {
-            onError.accept("Invalid username.");
-            return;
-        }
-        Thread.ofVirtual().name("MinimalsWH-lookup").start(() -> {
-            try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create("https://api.mojang.com/users/profiles/minecraft/" + username))
-                        .timeout(Duration.ofSeconds(5))
-                        .GET()
-                        .build();
-                HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() != 200) {
-                    onError.accept("Player not found.");
-                    return;
-                }
-                Matcher m = UUID_FIELD.matcher(response.body());
-                if (!m.find()) {
-                    onError.accept("Player not found.");
-                    return;
-                }
-                UUID uuid = uuidFromUndashed(m.group(1));
-                WorldHostFriends.add(uuid, username);
-                if (client != null) {
-                    client.friendRequest(uuid);
-                }
-                Minecraft.getInstance().execute(onSuccess);
-            } catch (Exception e) {
-                LOGGER.warn("Failed to look up player {}", username, e);
-                onError.accept("Could not reach Mojang's servers.");
-            }
-        });
-    }
-
-    public static void removeFriend(UUID uuid) {
-        WorldHostFriends.remove(uuid);
-        ONLINE_FRIENDS.remove(uuid);
-        MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
-        if (client != null && server != null && server.isPublished()) {
-            client.closedWorld(Set.of(uuid));
-        }
-    }
-
-    public static Map<UUID, String> friends() {
-        return WorldHostFriends.allWithNames();
-    }
+    // --- friends (vanilla friend list) ---------------------------------------
 
     public static boolean isFriendOnline(UUID uuid) {
         return ONLINE_FRIENDS.containsKey(uuid);
@@ -176,6 +153,10 @@ public final class WorldHostManager {
 
     /** Call after IntegratedServer.publishServer(...) succeeds, to announce it to online friends. */
     public static void onWorldPublished() {
+        Mode mode = pendingMode;
+        pendingMode = Mode.LAN;
+        if (mode != Mode.MULTIPLAYER) return; // plain LAN: never announced
+        multiplayerActive = true;
         LOGGER.info("World published, announcing to {} friend(s)", WorldHostFriends.all().size());
         if (client != null) {
             client.publishedWorld(WorldHostFriends.all());
@@ -188,6 +169,8 @@ public final class WorldHostManager {
     }
 
     public static void onWorldUnpublished() {
+        if (!multiplayerActive) return;
+        multiplayerActive = false;
         if (client != null) {
             client.closedWorld(WorldHostFriends.all());
         }
@@ -220,19 +203,10 @@ public final class WorldHostManager {
             }
 
             case WHS2CMessage.FriendRequest req -> {
-                boolean alreadyFriend = WorldHostFriends.isFriend(req.fromUser());
-                if (alreadyFriend) {
-                    MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
-                    if (server != null && server.isPublished() && client != null) {
-                        client.publishedWorld(Set.of(req.fromUser()));
-                    }
+                // A friend came online: (re)announce our world to just them.
+                if (multiplayerActive && client != null && WorldHostFriends.isFriend(req.fromUser())) {
+                    client.publishedWorld(Set.of(req.fromUser()));
                 }
-                showToast(
-                        alreadyFriend ? "Friend request" : "New friend request",
-                        alreadyFriend
-                                ? WorldHostFriends.nameOf(req.fromUser()) + " is now online."
-                                : WorldHostFriends.nameOf(req.fromUser()) + " added you. Use /worldhost or the Friends screen to add them back."
-                );
             }
 
             case WHS2CMessage.PublishedWorld pub -> {
@@ -240,7 +214,7 @@ public final class WorldHostManager {
                 ONLINE_FRIENDS.put(pub.user(), pub.connectionId());
                 showToast(
                         "Friend's world is open",
-                        WorldHostFriends.nameOf(pub.user()) + " opened their world. Open the Friends screen to join."
+                        WorldHostFriends.nameOf(pub.user()) + " opened their world. Open your Friends list to join."
                 );
             }
 
@@ -248,8 +222,7 @@ public final class WorldHostManager {
 
             case WHS2CMessage.RequestJoin reqJoin -> {
                 // A friend wants to join OUR world.
-                MinecraftServer server = Minecraft.getInstance().getSingleplayerServer();
-                if (server == null || !server.isPublished() || client == null) break;
+                if (!multiplayerActive || client == null || !WorldHostFriends.isFriend(reqJoin.user())) break;
                 client.joinGranted(reqJoin.connectionId());
                 showToast("Join request", WorldHostFriends.nameOf(reqJoin.user()) + " is joining your world.");
             }
@@ -297,13 +270,5 @@ public final class WorldHostManager {
                 Component.literal(title).withStyle(ChatFormatting.AQUA),
                 Component.literal(description)
         );
-    }
-
-    private static UUID uuidFromUndashed(String undashed) {
-        String dashed = undashed.replaceFirst(
-                "([0-9a-fA-F]{8})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{4})([0-9a-fA-F]{12})",
-                "$1-$2-$3-$4-$5"
-        );
-        return UUID.fromString(dashed);
     }
 }

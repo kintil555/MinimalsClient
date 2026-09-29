@@ -30,7 +30,9 @@
     "PlayerInfoMixin",
     "LivingEntityRendererAddLayerInvoker",
     "WorldHostPublishMixin",
-    "MultiplayerOptionsScreenMixin"
+    "MultiplayerOptionsScreenMixin",
+    "FriendEntryMixin",
+    "FriendsEntryAccessor"
   ],
   "mixins": [
     "PathNavigationMixin"
