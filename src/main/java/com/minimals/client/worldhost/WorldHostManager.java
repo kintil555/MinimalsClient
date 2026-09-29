@@ -28,7 +28,8 @@ import java.util.UUID;
  * integrated server via {@link ProxyHostBridge}.
  *
  * This is a from-scratch client (not a fork) built against io.github.gaming32's
- * World Host protocol v7, talking to the public relay world-host.jemnetworks.com:9646.
+ * World Host protocol v7, talking to the public relay world-host.jemnetworks.com:9646 for
+ * friend presence. Game traffic goes through the bundled e4mc relay (see {@link E4mcBridge}).
  */
 public final class WorldHostManager {
 
@@ -48,6 +49,10 @@ public final class WorldHostManager {
     /** Set by OpenWorldScreen right before publishServer(); consumed by onWorldPublished(). */
     private static Mode pendingMode = Mode.LAN;
     private static boolean multiplayerActive;
+    /** True once e4mc has a domain (or the wait timed out), i.e. friends may be told about the world. */
+    private static boolean announceReady;
+    private static int announceTimeoutTicks;
+    private static final int ANNOUNCE_TIMEOUT_TICKS = 300; // ~15s, then fall back to the relay proxy
     private static boolean friendListenerRegistered;
 
     private static int reconnectDelayTicks;
@@ -67,6 +72,27 @@ public final class WorldHostManager {
 
     public static void setPendingMode(Mode mode) {
         pendingMode = mode;
+        // e4mc's relay only runs for "Multiplayer"; plain LAN must stay private.
+        E4mcBridge.setHostEnabled(mode == Mode.MULTIPLAYER);
+    }
+
+    /**
+     * Called (on any thread) by {@link E4mcDomainHolder} when e4mc's relay assigned a domain.
+     * Friends only get the Join button once the domain exists, so joining never lands on a
+     * world that cannot be reached yet.
+     */
+    public static void onDomainAssigned() {
+        Minecraft.getInstance().execute(() -> {
+            if (!multiplayerActive || announceReady) return;
+            announceReady = true;
+            announceTo(WorldHostFriends.all());
+        });
+    }
+
+    private static void announceTo(java.util.Collection<UUID> friends) {
+        if (multiplayerActive && announceReady && client != null && !client.isClosed()) {
+            client.publishedWorld(friends);
+        }
     }
 
     /** True while the current integrated server is shared to friends through the relay. */
@@ -79,9 +105,7 @@ public final class WorldHostManager {
             ONLINE_FRIENDS.keySet().removeIf(id -> !WorldHostFriends.isFriend(id));
             if (client == null || client.isClosed()) return;
             client.listOnline(WorldHostFriends.all());
-            if (multiplayerActive) {
-                client.publishedWorld(WorldHostFriends.all());
-            }
+            announceTo(WorldHostFriends.all());
         });
     }
 
@@ -96,6 +120,10 @@ public final class WorldHostManager {
         }
         if (multiplayerActive && Minecraft.getInstance().getSingleplayerServer() == null) {
             onWorldUnpublished(); // left the world without an unpublish callback
+        }
+        if (multiplayerActive && !announceReady && --announceTimeoutTicks <= 0) {
+            announceReady = true; // e4mc gave no domain in time: friends still join via the relay proxy
+            announceTo(WorldHostFriends.all());
         }
         if (client == null || client.isClosed()) {
             client = null;
@@ -132,9 +160,7 @@ public final class WorldHostManager {
                 if (hostBridge != null) {
                     hostBridge.rebind(client);
                 }
-                if (multiplayerActive) {
-                    client.publishedWorld(WorldHostFriends.all());
-                }
+                announceTo(WorldHostFriends.all());
             }
         });
     }
@@ -157,10 +183,9 @@ public final class WorldHostManager {
         pendingMode = Mode.LAN;
         if (mode != Mode.MULTIPLAYER) return; // plain LAN: never announced
         multiplayerActive = true;
-        LOGGER.info("World published, announcing to {} friend(s)", WorldHostFriends.all().size());
-        if (client != null) {
-            client.publishedWorld(WorldHostFriends.all());
-        }
+        announceReady = E4mcDomainHolder.get() != null; // otherwise wait for e4mc's domain
+        announceTimeoutTicks = ANNOUNCE_TIMEOUT_TICKS;
+        LOGGER.info("World published, waiting for e4mc domain before announcing to {} friend(s)", WorldHostFriends.all().size());
         if (hostBridge == null) {
             hostBridge = new ProxyHostBridge(client);
         } else {
@@ -171,6 +196,8 @@ public final class WorldHostManager {
     public static void onWorldUnpublished() {
         if (!multiplayerActive) return;
         multiplayerActive = false;
+        announceReady = false;
+        E4mcDomainHolder.clear();
         if (client != null) {
             client.closedWorld(WorldHostFriends.all());
         }
@@ -204,8 +231,8 @@ public final class WorldHostManager {
 
             case WHS2CMessage.FriendRequest req -> {
                 // A friend came online: (re)announce our world to just them.
-                if (multiplayerActive && client != null && WorldHostFriends.isFriend(req.fromUser())) {
-                    client.publishedWorld(Set.of(req.fromUser()));
+                if (WorldHostFriends.isFriend(req.fromUser())) {
+                    announceTo(Set.of(req.fromUser()));
                 }
             }
 

@@ -26,5 +26,10 @@
   },
   "suggests": {
     "flashback": ">=0.43.0"
-  }
+  },
+  "jars": [
+    {
+      "file": "META-INF/jars/e4mc-fabric-6_2_2-modern.jar"
+    }
+  ]
 }

@@ -28,7 +28,8 @@ public abstract class E4mcSessionAccessorMixin {
     @Inject(
             method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;Llink/e4mc/QuiclimeSession$ControlMessageCodec$ControlMessage;)V",
             at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;info(Ljava/lang/String;Ljava/lang/Object;)V"),
-            locals = LocalCapture.CAPTURE_FAILEXCEPTION
+            locals = LocalCapture.CAPTURE_FAILEXCEPTION,
+            require = 0
     )
     private void minimals$captureDomain(Object ctx, Object msg, CallbackInfo ci, String domain) {
         E4mcDomainHolder.set(domain);

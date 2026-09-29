@@ -107,7 +107,7 @@ public class OpenWorldScreen extends Screen {
         this.lanButton = modeRow.addChild(Button.builder(Component.literal("LAN"), b -> selectMode(Mode.LAN))
                 .width(150).tooltip(Tooltip.create(MinecraftServer.MultiplayerScope.LAN.getTooltip())).build());
         this.multiplayerButton = modeRow.addChild(Button.builder(Component.literal("Multiplayer"), b -> selectMode(Mode.MULTIPLAYER))
-                .width(150).tooltip(Tooltip.create(Component.literal("Friends on your Friends list get a Join button and connect through World Host / e4mc.")))
+                .width(150).tooltip(Tooltip.create(Component.literal("Friends on your Friends list get a Join button and connect through the built-in e4mc relay.")))
                 .build());
         this.infoSlot = content.addChild(new StringWidget(ROW_WIDTH, this.font.lineHeight, Component.empty(), this.font));
 

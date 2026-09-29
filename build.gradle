@@ -25,13 +25,8 @@ dependencies {
     // No mappings line: Loom defaults to Mojang's official mappings on 26.x.
     implementation 'net.fabricmc:fabric-loader:0.19.3'
     implementation 'net.fabricmc.fabric-api:fabric-api:0.157.0+26.2'
-    // e4mc: real P2P (iroh/QUIC) replacing our World Host relay-proxy for game traffic.
-    // World Host relay is kept only for friend presence + ticket delivery (see WorldHostManager).
-    // compileOnly, NOT bundled: e4mc must be installed by the user as its own separate mod
-    // jar in mods/ (standard e4mc distribution) — we only compile against its classes here.
-    // Vendored locally (libs/) for compiling instead of a remote Maven coordinate: e4mc's
-    // actual publish location (Modrinth Maven, group "maven.modrinth") uses opaque per-version
-    // IDs we couldn't confirm for the 26.2 "Fabric Modern" 6.2.2 build; this file is verified correct.
+    // e4mc (MIT, by Skye) is compiled against here and bundled as a nested jar (see processResources)
+    // so players don't need to install it. Vendored in libs/ (verified 6.2.2 Fabric Modern build).
     compileOnly files('libs/e4mc-fabric-6_2_2-modern.jar')
     // MixinExtras (@WrapOperation etc.) is bundled at runtime by fabric-loader 0.15.0+,
     // so we only need it on the compile classpath here, not packaged into the jar.
@@ -56,4 +51,13 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+}
+
+processResources {
+    from('libs/e4mc-fabric-6_2_2-modern.jar') {
+        into 'META-INF/jars'
+    }
+    from('libs/E4MC-LICENSE.txt') {
+        into 'META-INF'
+    }
 }

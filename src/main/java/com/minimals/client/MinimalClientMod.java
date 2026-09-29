@@ -58,7 +58,7 @@ public class MinimalClientMod implements ClientModInitializer {
         // Registers the menu-open / button-hover SoundEvents (must happen during init).
         com.minimals.client.sound.MinimalsSounds.init();
         com.minimals.client.worldhost.E4mcJoinUpgrade.init();
-        com.minimals.client.worldhost.E4mcMissingNotice.init();
+        com.minimals.client.worldhost.E4mcCreditNotice.init();
         // Bound the skin/cape preview cache and delete legacy counter-named leftovers (off-thread).
         // Own short-lived daemon thread instead of the shared ForkJoin common pool (which the
         // game and other mods rely on), and a failure is logged instead of swallowed silently.

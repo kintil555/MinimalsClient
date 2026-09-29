@@ -13,6 +13,7 @@ public final class E4mcDomainHolder {
 
     public static void set(String value) {
         domain = value;
+        WorldHostManager.onDomainAssigned();
     }
 
     /** Null until e4mc finishes domain assignment for the current session. */
