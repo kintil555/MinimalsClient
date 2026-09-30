@@ -132,7 +132,7 @@ public class WaypointCreateScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.gui.setScreen(returnTo);
+        minecraft.setScreen(returnTo);
     }
 
     @Override

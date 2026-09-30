@@ -39,9 +39,6 @@ public abstract class PostEffectMixin {
     private Minecraft minecraft;
     @Shadow
     @Final
-    private RenderTarget mainRenderTarget;
-    @Shadow
-    @Final
     private CrossFrameResourcePool resourcePool;
 
     /** Ids that returned no chain (bad id / broken json); cleared when the module is toggled. */
@@ -71,7 +68,7 @@ public abstract class PostEffectMixin {
                 minimals$failed.add(id);
                 continue;
             }
-            chain.process(mainRenderTarget, resourcePool);
+            chain.process(minecraft.getMainRenderTarget(), resourcePool);
         }
     }
 }

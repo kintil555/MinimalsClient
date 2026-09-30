@@ -24,7 +24,7 @@ public class SelfNameTagMixin {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
-        if (entity != mc.player || mc.options.getCameraType().isFirstPerson() || mc.gui.hud.isHidden()) {
+        if (entity != mc.player || mc.options.getCameraType().isFirstPerson() || mc.options.hideGui) {
             return;
         }
         cir.setReturnValue(true);

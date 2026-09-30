@@ -134,14 +134,14 @@ public class MenuScreen extends Screen {
         HeaderIconButtonWidget waypoints = new HeaderIconButtonWidget(
                 headerRight - HEADER_BTN * 2 - ROW_GAP, headerY, HEADER_BTN,
                 "waypoint/locate", "Waypoints",
-                () -> Minecraft.getInstance().gui.setScreen(new WaypointListScreen(this)));
+                () -> Minecraft.getInstance().setScreen(new WaypointListScreen(this)));
         addRenderableWidget(waypoints);
         chromeWidgets.add(waypoints);
 
         HeaderIconButtonWidget hudEditor = new HeaderIconButtonWidget(
                 headerRight - HEADER_BTN, headerY, HEADER_BTN,
                 "editor", "HUD Editor",
-                () -> Minecraft.getInstance().gui.setScreen(new HudEditorScreen()));
+                () -> Minecraft.getInstance().setScreen(new HudEditorScreen()));
         addRenderableWidget(hudEditor);
         chromeWidgets.add(hudEditor);
 
@@ -446,7 +446,7 @@ public class MenuScreen extends Screen {
      * to ignore the HUD/menu hotkeys so typing "h" or pressing RSHIFT cannot fire them.
      */
     public static boolean isTypingInMenu() {
-        return Minecraft.getInstance().gui.screen() instanceof MenuScreen menu && menu.isTextFieldFocused();
+        return Minecraft.getInstance().screen instanceof MenuScreen menu && menu.isTextFieldFocused();
     }
 
     private boolean isTextFieldFocused() {

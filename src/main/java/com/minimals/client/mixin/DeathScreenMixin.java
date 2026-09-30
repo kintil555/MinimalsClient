@@ -48,7 +48,7 @@ public abstract class DeathScreenMixin extends Screen {
         Screen self = this;
 
         addRenderableWidget(Button.builder(Component.literal("Set Waypoint"), btn ->
-                        Minecraft.getInstance().gui.setScreen(
+                        Minecraft.getInstance().setScreen(
                                 new WaypointCreateScreen(self, x, y, z, "Death", WaypointIcon.DEATH)))
                 .bounds(width / 2 - 100, height / 4 + 120, 200, 20).build());
     }

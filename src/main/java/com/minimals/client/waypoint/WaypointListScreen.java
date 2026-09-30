@@ -112,7 +112,7 @@ public class WaypointListScreen extends Screen {
         if (mc.player == null) {
             return;
         }
-        mc.gui.setScreen(new WaypointCreateScreen(this,
+        mc.setScreen(new WaypointCreateScreen(this,
                 mc.player.getBlockX(), mc.player.getBlockY(), mc.player.getBlockZ(), "", WaypointIcon.LOCATE));
     }
 
@@ -292,7 +292,7 @@ public class WaypointListScreen extends Screen {
 
     @Override
     public void onClose() {
-        minecraft.gui.setScreen(returnTo);
+        minecraft.setScreen(returnTo);
     }
 
     @Override

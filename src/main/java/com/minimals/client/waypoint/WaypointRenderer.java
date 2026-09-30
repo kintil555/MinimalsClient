@@ -84,7 +84,7 @@ public final class WaypointRenderer {
         }
         pruneCache(waypoints);
 
-        Camera camera = mc.gameRenderer.mainCamera();
+        Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 cameraPos = camera.position();
         Vector3fc forward = camera.forwardVector();
 

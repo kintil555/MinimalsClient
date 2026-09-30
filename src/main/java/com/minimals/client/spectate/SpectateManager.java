@@ -85,7 +85,7 @@ public final class SpectateManager {
 
         // Own keybind (default Q). consumeClick() is per-KeyMapping, so it can never
         // interfere with the vanilla Drop Item binding even though both default to Q.
-        if (exitKey != null && exitKey.consumeClick() && mc.gui.screen() == null) {
+        if (exitKey != null && exitKey.consumeClick() && mc.screen == null) {
             stop();
             return;
         }

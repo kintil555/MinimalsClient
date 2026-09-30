@@ -4,6 +4,7 @@ import com.minimals.client.flashback.postfx.PostFxRenderer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.CrossFrameResourcePool;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +23,7 @@ public abstract class PostEffectRenderMixin {
 
     @Shadow
     @Final
-    private RenderTarget mainRenderTarget;
+    private Minecraft minecraft;
     @Shadow
     @Final
     private CrossFrameResourcePool resourcePool;
@@ -30,6 +31,6 @@ public abstract class PostEffectRenderMixin {
     @Inject(method = "render", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/LevelRenderer;doEntityOutline()V", shift = At.Shift.AFTER))
     private void minimals$flashbackPostEffects(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
-        PostFxRenderer.render(mainRenderTarget, resourcePool);
+        PostFxRenderer.render(minecraft.getMainRenderTarget(), resourcePool);
     }
 }

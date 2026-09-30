@@ -144,22 +144,22 @@ public class MinimalClientMod implements ClientModInitializer {
                 return;
             }
             while (menuKey.consumeClick()) {
-                Screen open = client.gui.screen();
+                Screen open = client.screen;
                 if (open == null) {
-                    client.gui.setScreen(new MenuChoiceScreen());
+                    client.setScreen(new MenuChoiceScreen());
                 } else if (open instanceof MenuScreen || open instanceof MenuChoiceScreen
                         || open instanceof com.minimals.client.spectate.SpectateScreen) {
-                    client.gui.setScreen((Screen) null);
+                    client.setScreen((Screen) null);
                 }
             }
             while (hudToggleKey.consumeClick()) {
                 hudVisible = !hudVisible;
             }
             while (hudEditorKey.consumeClick()) {
-                if (client.gui.screen() == null) {
-                    client.gui.setScreen(new HudEditorScreen());
-                } else if (client.gui.screen() instanceof HudEditorScreen) {
-                    client.gui.setScreen((Screen) null);
+                if (client.screen == null) {
+                    client.setScreen(new HudEditorScreen());
+                } else if (client.screen instanceof HudEditorScreen) {
+                    client.setScreen((Screen) null);
                 }
             }
 
@@ -168,9 +168,9 @@ public class MinimalClientMod implements ClientModInitializer {
             // Keeps the waypoint list matched to the current world/dimension (cheap when unchanged).
             WaypointManager.sync(client);
             while (addWaypointKey.consumeClick()) {
-                if (client.gui.screen() == null && client.player != null && client.level != null
+                if (client.screen == null && client.player != null && client.level != null
                         && ModuleManager.waypoints().isEnabled()) {
-                    client.gui.setScreen(new WaypointCreateScreen(null,
+                    client.setScreen(new WaypointCreateScreen(null,
                             client.player.getBlockX(), client.player.getBlockY(), client.player.getBlockZ(),
                             "", WaypointIcon.LOCATE));
                 }
@@ -196,7 +196,7 @@ public class MinimalClientMod implements ClientModInitializer {
         KeyMapping sprintKey = client.options.keySprint;
         boolean want = ModuleManager.isEnabled("Sprint")
                 && !SpectateManager.isSpectating()
-                && client.gui.screen() == null
+                && client.screen == null
                 && client.options.keyUp.isDown();
         if (want) {
             if (!sprintKey.isDown()) {
@@ -219,7 +219,7 @@ public class MinimalClientMod implements ClientModInitializer {
      * open (chat, menu rebinding, inventory) so typing never flips a module by accident.
      */
     private static void pollModuleKeybinds(Minecraft client) {
-        Screen screen = client.gui.screen();
+        Screen screen = client.screen;
         for (Module module : ModuleManager.getAllModules()) {
             if (module.isHoldKeybind()) {
                 syncHoldModule(client, module, screen);
@@ -265,7 +265,7 @@ public class MinimalClientMod implements ClientModInitializer {
         WaypointRenderer.render(graphics);
         // While the HUD editor is open it draws every element itself (smoothly, following the
         // cursor). Drawing them here too would show a second, laggier copy underneath.
-        if (Minecraft.getInstance().gui.screen() instanceof HudEditorScreen) return;
+        if (Minecraft.getInstance().screen instanceof HudEditorScreen) return;
         for (HudElement element : HudRegistry.all()) {
             element.onScreenSize(graphics.guiWidth(), graphics.guiHeight());
             if (element.isActive()) {

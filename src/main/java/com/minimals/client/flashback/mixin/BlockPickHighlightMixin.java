@@ -1,7 +1,8 @@
 package com.minimals.client.flashback.mixin;
 
 import com.minimals.client.flashback.postfx.BlockPickMode;
-import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gizmos.GizmoStyle;
 import net.minecraft.gizmos.Gizmos;
@@ -13,17 +14,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Yellow highlight on the block under the dragged eyedropper. Same hook as the Block On Entities
- * module (LevelExtractor.extractGizmos at HEAD, verified in the 26.2 jar), drawn through walls so
+ * module (DebugRenderer.emitGizmos at HEAD, verified in the 26.1.2 jar), drawn through walls so
  * the target stays visible even when something is in front of it.
  */
-@Mixin(LevelExtractor.class)
+@Mixin(DebugRenderer.class)
 public abstract class BlockPickHighlightMixin {
 
     private static final int YELLOW_STROKE = ARGB.color(255, 255, 230, 0);
     private static final int YELLOW_FILL = ARGB.color(70, 255, 230, 0);
 
-    @Inject(method = "extractGizmos", at = @At("HEAD"))
-    private void minimals$highlightPickTarget(CallbackInfo ci) {
+    @Inject(method = "emitGizmos", at = @At("HEAD"))
+    private void minimals$highlightPickTarget(Frustum frustum, double camX, double camY, double camZ, float partialTick, CallbackInfo ci) {
         BlockPickMode.tickWatchdog();
         BlockPos pos = BlockPickMode.hovered();
         if (pos == null) {

@@ -105,7 +105,7 @@ public class SpearMomentumElement extends HudElement {
         }
         current = module().read();
         // Always drawn in the editor so it can be positioned without holding a spear.
-        if (Minecraft.getInstance().gui.screen() instanceof HudEditorScreen) {
+        if (Minecraft.getInstance().screen instanceof HudEditorScreen) {
             return true;
         }
         return current != null;
@@ -124,7 +124,7 @@ public class SpearMomentumElement extends HudElement {
     @Override
     public void render(GuiGraphicsExtractor graphics, DeltaTracker deltaTracker, int x, int y) {
         Font font = Minecraft.getInstance().font;
-        boolean inEditor = Minecraft.getInstance().gui.screen() instanceof HudEditorScreen;
+        boolean inEditor = Minecraft.getInstance().screen instanceof HudEditorScreen;
 
         // In the editor a dragged element skips isActive(), so take a fresh reading there.
         SpearMomentumModule.Reading reading = inEditor ? module().read() : current;

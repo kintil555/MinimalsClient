@@ -43,7 +43,7 @@ public class BlockEntityCullingMixin {
         if (mc.gameRenderer == null) {
             return;
         }
-        Vec3 camera = mc.gameRenderer.mainCamera().position();
+        Vec3 camera = mc.gameRenderer.getMainCamera().position();
 
         BlockPos pos = blockEntity.getBlockPos();
         if (!OcclusionHelper.isBlockVisible(level, camera, pos.getX(), pos.getY(), pos.getZ())) {

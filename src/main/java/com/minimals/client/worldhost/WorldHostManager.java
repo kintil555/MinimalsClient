@@ -9,7 +9,6 @@ import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.client.gui.screens.social.PlayerSocialManager;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -124,13 +123,6 @@ public final class WorldHostManager {
 
     public static void tick() {
         if (!initialized) return;
-        if (!friendListenerRegistered) {
-            PlayerSocialManager social = Minecraft.getInstance().getPlayerSocialManager();
-            if (social != null) {
-                social.addFriendListUpdateListener(WorldHostManager::onFriendListChanged);
-                friendListenerRegistered = true;
-            }
-        }
         if (multiplayerActive && Minecraft.getInstance().getSingleplayerServer() == null) {
             onWorldUnpublished(); // left the world without an unpublish callback
         }
@@ -246,7 +238,7 @@ public final class WorldHostManager {
                 Minecraft mc = Minecraft.getInstance();
                 ServerData serverData = new ServerData("Friend's world", game.host() + ":" + game.port(), ServerData.Type.OTHER);
                 ConnectScreen.startConnecting(
-                        mc.gui.screen() != null ? mc.gui.screen() : new TitleScreen(),
+                        mc.screen != null ? mc.screen : new TitleScreen(),
                         mc, new ServerAddress(game.host(), game.port()), serverData, false, null
                 );
             }
@@ -307,7 +299,7 @@ public final class WorldHostManager {
                 Minecraft mc = Minecraft.getInstance();
                 ServerData serverData = new ServerData("Friend's world (e4mc)", domain, ServerData.Type.OTHER);
                 ConnectScreen.startConnecting(
-                        mc.gui.screen() != null ? mc.gui.screen() : new TitleScreen(),
+                        mc.screen != null ? mc.screen : new TitleScreen(),
                         mc, ServerAddress.parseString(domain), serverData, false, null
                 );
             }
@@ -378,7 +370,7 @@ public final class WorldHostManager {
     private static void showToast(String title, String description) {
         Minecraft mc = Minecraft.getInstance();
         SystemToast.add(
-                mc.gui.toastManager(),
+                mc.getToastManager(),
                 new SystemToast.SystemToastId(),
                 Component.literal(title).withStyle(ChatFormatting.AQUA),
                 Component.literal(description)

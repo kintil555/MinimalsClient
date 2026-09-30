@@ -158,9 +158,9 @@ public class MenuChoiceScreen extends Screen {
         }
         Minecraft mc = Minecraft.getInstance();
         switch (slot) {
-            case MENU -> mc.gui.setScreen(MenuScreen.create());
-            case SPECTATE -> mc.gui.setScreen(new SpectateScreen());
-            case DRESS -> mc.gui.setScreen(new com.minimals.client.dressing.DressingRoomScreen());
+            case MENU -> mc.setScreen(MenuScreen.create());
+            case SPECTATE -> mc.setScreen(new SpectateScreen());
+            case DRESS -> mc.setScreen(new com.minimals.client.dressing.DressingRoomScreen());
             case RECORD -> {
                 if (FlashbackBridge.isRecording()) {
                     FlashbackBridge.finishRecording();

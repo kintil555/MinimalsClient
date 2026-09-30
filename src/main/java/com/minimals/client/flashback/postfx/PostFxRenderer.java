@@ -81,7 +81,7 @@ public final class PostFxRenderer {
         if (fx.kind() == PostFxKind.CUSTOM || fx.blocks().isEmpty()) {
             return null; // custom chains cannot be masked; no blocks means nothing to affect
         }
-        Camera camera = Minecraft.getInstance().gameRenderer.mainCamera();
+        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
         List<float[]> circles = new ArrayList<>();
         for (PostFxBlock block : fx.blocks()) {
             float[] p = PostFxProjector.project(camera, block, main.width, main.height);

@@ -4,7 +4,8 @@ import com.minimals.client.module.BlockOnEntitiesModule;
 import com.minimals.client.module.ModuleManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.client.renderer.debug.DebugRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gizmos.GizmoProperties;
 import net.minecraft.gizmos.GizmoStyle;
@@ -20,20 +21,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Block On Entities: quick-access version of the F3 "visualize_entity_supporting_block"
  * debug option. Outlines the block under every entity in red (player included), using the
- * same Gizmos API as vanilla's SupportBlockRenderer. Injected at HEAD of extractGizmos(),
+ * same Gizmos API as vanilla's SupportBlockRenderer. Injected at HEAD of DebugRenderer.emitGizmos(),
  * which runs after the debug renderers emitted and before the collector is drained.
  *
  * Configurable via {@link BlockOnEntitiesModule}: entities further than the render distance
  * are skipped, and the outline is only drawn through walls (setAlwaysOnTop) when culling
  * is turned off.
  */
-@Mixin(LevelExtractor.class)
+@Mixin(DebugRenderer.class)
 public class LevelExtractorMixin {
 
     private static final int RED = ARGB.color(255, 255, 0, 0);
 
-    @Inject(method = "extractGizmos", at = @At("HEAD"))
-    private void minimals$blockOnEntities(CallbackInfo ci) {
+    @Inject(method = "emitGizmos", at = @At("HEAD"))
+    private void minimals$blockOnEntities(Frustum frustum, double camX, double camY, double camZ, float partialTick, CallbackInfo ci) {
         BlockOnEntitiesModule module = ModuleManager.blockOnEntities();
         if (!module.isEnabled()) {
             return;

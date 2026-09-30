@@ -345,7 +345,7 @@ public class SkinEditorScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().gui.setScreen(returnTo);
+        Minecraft.getInstance().setScreen(returnTo);
     }
 
     // ---- tools -------------------------------------------------------------------------------

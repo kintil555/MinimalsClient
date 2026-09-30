@@ -23,7 +23,7 @@ public final class E4mcCreditNotice {
     public static void init() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (checked) return;
-            Screen screen = client.gui.screen();
+            Screen screen = client.screen;
             if (!(screen instanceof TitleScreen)) return;
             checked = true;
 
@@ -34,8 +34,8 @@ public final class E4mcCreditNotice {
             } catch (IOException ignored) {
                 // Can't persist the flag: still show it this launch.
             }
-            client.gui.setScreen(new AlertScreen(
-                    () -> client.gui.setScreen(new TitleScreen()),
+            client.setScreen(new AlertScreen(
+                    () -> client.setScreen(new TitleScreen()),
                     Component.literal("Thanks to e4mc"),
                     Component.literal("Multiplayer in Minimals is powered by the e4mc relay, built by Skye "
                             + "(MIT licence). It is bundled inside this client, so you don't need to install "

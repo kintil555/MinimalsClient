@@ -7,7 +7,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.Hud;
+import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -205,7 +205,7 @@ public class WailaElement extends HudElement {
         }
         // In the HUD editor always draw the preview box so it can be positioned without
         // having to aim at something.
-        if (Minecraft.getInstance().gui.screen() instanceof HudEditorScreen) {
+        if (Minecraft.getInstance().screen instanceof HudEditorScreen) {
             buildSnapshot();
             return true;
         }
@@ -214,7 +214,7 @@ public class WailaElement extends HudElement {
 
     /** What is (or would be) drawn right now: the live target, or the sample in the editor. */
     private Snapshot displaySnapshot() {
-        boolean inEditor = Minecraft.getInstance().gui.screen() instanceof HudEditorScreen;
+        boolean inEditor = Minecraft.getInstance().screen instanceof HudEditorScreen;
         return (inEditor || last == null) ? sampleSnapshot() : last;
     }
 
@@ -235,7 +235,7 @@ public class WailaElement extends HudElement {
         // isActive() already rebuilt the snapshot this frame in the normal HUD, so reuse it
         // instead of walking the target twice. In the editor (where a dragged element skips
         // isActive) always show the sample, never a stale cached target.
-        Snapshot snap = mc.gui.screen() instanceof HudEditorScreen ? null : last;
+        Snapshot snap = mc.screen instanceof HudEditorScreen ? null : last;
         if (snap == null) {
             drawPlaceholder(graphics, font, x, y);
             return;
@@ -354,7 +354,7 @@ public class WailaElement extends HudElement {
     }
 
     private static void drawEffect(GuiGraphicsExtractor graphics, Font font, EffectLine line, int x, int y) {
-        Identifier sprite = Hud.getMobEffectSprite(line.instance().getEffect());
+        Identifier sprite = Gui.getMobEffectSprite(line.instance().getEffect());
         graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, EFFECT_ICON, EFFECT_ICON);
         int color = effectColor(line.instance());
         graphics.text(font, line.label(), x + EFFECT_ICON + 3, y + (EFFECT_ICON - font.lineHeight) / 2 + 1, color);
@@ -381,7 +381,7 @@ public class WailaElement extends HudElement {
         HitResult hit = mc.hitResult;
         // While the HUD editor is open the box must not flicker between whatever is behind it;
         // show the fixed placeholder so it is easy to grab and position.
-        if (mc.gui.screen() instanceof HudEditorScreen) {
+        if (mc.screen instanceof HudEditorScreen) {
             invalidateCache();
             return null;
         }

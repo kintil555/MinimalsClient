@@ -721,7 +721,7 @@ public class DressingRoomScreen extends Screen {
 
     private void initEmissionTab(int x, int y, int w) {
         addRenderableWidget(Button.builder(Component.literal("Open Skin Editor"), btn ->
-                        Minecraft.getInstance().gui.setScreen(new SkinEditorScreen(this)))
+                        Minecraft.getInstance().setScreen(new SkinEditorScreen(this)))
                 .bounds(x, y, w, 20)
                 .build());
         addRenderableWidget(Button.builder(Component.literal("Clear Glow Mask"), btn -> clearMask())
@@ -810,7 +810,7 @@ public class DressingRoomScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().gui.setScreen(null);
+        Minecraft.getInstance().setScreen(null);
     }
 
     @Override

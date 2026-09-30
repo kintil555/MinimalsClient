@@ -28,11 +28,7 @@
     "WidgetHoverSoundMixin",
     "AvatarRendererMixin",
     "PlayerInfoMixin",
-    "LivingEntityRendererAddLayerInvoker",
-    "WorldHostPublishMixin",
-    "MultiplayerOptionsScreenMixin",
-    "FriendEntryMixin",
-    "FriendsEntryAccessor"
+    "LivingEntityRendererAddLayerInvoker"
   ],
   "mixins": [
     "PathNavigationMixin"

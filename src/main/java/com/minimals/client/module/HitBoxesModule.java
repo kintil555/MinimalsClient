@@ -17,8 +17,8 @@ public class HitBoxesModule extends Module {
     protected void onToggle(boolean enabled) {
         // Vanilla only rebuilds its debug renderer list when a debug option changes.
         Minecraft mc = Minecraft.getInstance();
-        if (mc.levelExtractor != null) {
-            mc.levelExtractor.debugRenderer.refreshRendererList();
+        if (mc.levelRenderer != null) {
+            mc.levelRenderer.debugRenderer.refreshRendererList();
         }
     }
 }

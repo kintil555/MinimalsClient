@@ -22,11 +22,11 @@ public final class CustomizePlayerBridge {
 
     /** Opens CPM's full model editor (build/edit the player's model, textures, animations). */
     public static void openEditor(Screen parent) {
-        Minecraft.getInstance().gui.setScreen(new GuiImpl(EditorGui::new, parent));
+        Minecraft.getInstance().setScreen(new GuiImpl(EditorGui::new, parent));
     }
 
     /** Opens CPM's model browser (choose/apply one of the saved models). */
     public static void openModels(Screen parent) {
-        Minecraft.getInstance().gui.setScreen(new GuiImpl(ModelsGui::new, parent));
+        Minecraft.getInstance().setScreen(new GuiImpl(ModelsGui::new, parent));
     }
 }

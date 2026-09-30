@@ -100,7 +100,7 @@ public class SpectateScreen extends Screen {
             SpectateButton btn = new SpectateButton(px() + PANEL_W - PAD - SPECTATE_W - 6, y + (CARD_H - 22) / 2,
                     () -> {
                         SpectateManager.start(id);
-                        Minecraft.getInstance().gui.setScreen((Screen) null);
+                        Minecraft.getInstance().setScreen((Screen) null);
                     });
             addRenderableWidget(btn);
             cards.add(new Card(info, btn, y));
