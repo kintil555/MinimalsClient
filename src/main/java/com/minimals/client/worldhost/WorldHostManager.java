@@ -61,7 +61,7 @@ public final class WorldHostManager {
     /** Friend we sent a query to (waiting for their e4mc domain), or null. */
     private static UUID pendingQueryFriend;
     private static int pendingQueryTicks;
-    private static final int QUERY_TIMEOUT_TICKS = 200; // ~10s, then fall back to the proxy join
+    private static final int QUERY_TIMEOUT_TICKS = 100; // ~5s, then fall back to the proxy join
     /** True once e4mc has a domain (or the wait timed out), i.e. friends may be told about the world. */
     private static boolean announceReady;
     private static int announceTimeoutTicks;
@@ -138,6 +138,7 @@ public final class WorldHostManager {
             UUID friend = pendingQueryFriend;
             pendingQueryFriend = null;
             LOGGER.info("[join] No e4mc domain from {} in time, falling back to proxy join", friend);
+            showToast("Joining...", WorldHostFriends.nameOf(friend) + " didn't send an e4mc address (old version?). Trying the relay.");
             proxyJoin(friend);
         }
         if (multiplayerActive && !announceReady && --announceTimeoutTicks <= 0) {
@@ -297,6 +298,7 @@ public final class WorldHostManager {
             }
 
             case WHS2CMessage.NewQueryResponse response -> {
+                LOGGER.info("[join] NewQueryResponse from {} ({} bytes, pending={})", response.friend(), response.status().length, pendingQueryFriend);
                 if (pendingQueryFriend == null || !pendingQueryFriend.equals(response.friend())) break;
                 String domain = decodeDomain(response.status());
                 LOGGER.info("[join] Query answer from {}: domain={}", response.friend(), domain);
@@ -330,9 +332,11 @@ public final class WorldHostManager {
         }
         // Ask the host for its e4mc domain (the relay only forwards this one small message),
         // then connect straight to e4mc. No game traffic goes through World Host.
+        if (friendUuid.equals(pendingQueryFriend)) return; // already asking; repeated clicks must not reset the timer
         pendingQueryFriend = friendUuid;
         pendingQueryTicks = QUERY_TIMEOUT_TICKS;
         LOGGER.info("[join] Querying {} for their e4mc domain", friendUuid);
+        showToast("Joining...", "Asking " + WorldHostFriends.nameOf(friendUuid) + " for their address.");
         client.queryFriends(List.of(friendUuid));
     }
 
