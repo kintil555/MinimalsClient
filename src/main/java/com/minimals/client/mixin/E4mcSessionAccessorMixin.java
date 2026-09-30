@@ -1,39 +1,26 @@
 package com.minimals.client.mixin;
 
 import com.minimals.client.worldhost.E4mcDomainHolder;
+import net.minecraft.network.chat.ClickEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * e4mc's QuiclimeSession only prints the assigned domain to chat; it has no public
- * getter/callback. The assignment happens inside an anonymous
- * SimpleChannelInboundHandler#channelRead0 nested in start(), right before
- * "LOGGER.info(\"Domain assigned: {}\", domain)" — we anchor there and capture the
- * local `domain` variable, since anonymous inner classes can't be targeted directly.
- *
- * IMPORTANT: this couples us to e4mc 6.2.2's internal layout (anonymous class name +
- * line-level anchor via the LOGGER.info call). Verified against the actual shipped jar
- * (e4mc-fabric-6_2_2-modern.jar) via javap/decompilation — the handler is
- * QuiclimeSession$2$1 (extends SimpleChannelInboundHandler, has both the bridge and the
- * generic channelRead0 overloads; we target the generic one taking ControlMessage).
- * javac's anonymous-class numbering doesn't map 1:1 to source nesting, so if e4mc updates,
- * re-decompile the new jar and re-check this name/target before re-guessing it.
+ * e4mc has no public getter/callback for the domain its relay assigned. The only place it
+ * hands the domain to a public static method is the "Domain assigned" chat message, which
+ * builds a click-to-copy event with {@code Mirror.copyToClipboard(domain)} (its only caller,
+ * verified in e4mc 6.2.2's source). We hook that call instead of the anonymous network
+ * handler: its parameter types are private nested classes that a mixin can't name.
+ * require = 0: if a different e4mc version changes this, the join just uses the relay fallback.
  */
-@Mixin(targets = "link.e4mc.QuiclimeSession$2$1")
+@Mixin(targets = "link.e4mc.Mirror")
 public abstract class E4mcSessionAccessorMixin {
 
-    @Inject(
-            method = "channelRead0(Lio/netty/channel/ChannelHandlerContext;Llink/e4mc/QuiclimeSession$ControlMessageCodec$ControlMessage;)V",
-            at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;info(Ljava/lang/String;Ljava/lang/Object;)V"),
-            locals = LocalCapture.CAPTURE_FAILEXCEPTION,
-            require = 0
-    )
-    private void minimals$captureDomain(Object ctx, Object msg, CallbackInfo ci, String domain) {
-        E4mcDomainHolder.set(domain);
+    @Inject(method = "copyToClipboard(Ljava/lang/String;)Lnet/minecraft/network/chat/ClickEvent;",
+            at = @At("HEAD"), require = 0)
+    private static void minimals$captureDomain(String value, CallbackInfoReturnable<ClickEvent> cir) {
+        E4mcDomainHolder.set(value);
     }
 }
-
-
