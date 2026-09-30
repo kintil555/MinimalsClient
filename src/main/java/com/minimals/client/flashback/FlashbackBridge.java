@@ -16,7 +16,7 @@ public final class FlashbackBridge {
 
     public static final String MOD_ID = "flashback";
     /** Oldest Flashback this client was written against (keep in sync with fabric.mod.json "suggests"). */
-    public static final String MIN_VERSION = "0.42.1";
+    public static final String MIN_VERSION = "0.43.3";
 
     private static final String INSTALLED_VERSION = FabricLoader.getInstance().getModContainer(MOD_ID)
             .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse(null);
