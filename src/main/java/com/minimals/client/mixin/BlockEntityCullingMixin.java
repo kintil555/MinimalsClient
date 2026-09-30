@@ -27,7 +27,6 @@ public class BlockEntityCullingMixin {
     @Inject(method = "tryExtractRenderState", at = @At("HEAD"), cancellable = true)
     private void minimals$occlusionCull(BlockEntity blockEntity, float partialTick,
                                         ModelFeatureRenderer.CrumblingOverlay crumblingOverlay,
-                                        boolean flag,
                                         CallbackInfoReturnable<BlockEntityRenderState> cir) {
         OptimizationModule module = ModuleManager.optimization();
         if (!module.isEnabled() || !module.blockEntityCulling.get()) {
