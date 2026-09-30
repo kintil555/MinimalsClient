@@ -116,6 +116,22 @@ public sealed interface WHS2CMessage {
         }
     }
 
+    /** A friend asks us (the host) for our world's status. Answer with NewQueryResponse. */
+    record QueryRequest(UUID friend, long connectionId, int security) implements WHS2CMessage {
+        public static final int ID = 7;
+        public static QueryRequest decode(DataInputStream dis) throws IOException {
+            return new QueryRequest(readUuid(dis), dis.readLong(), dis.readUnsignedByte());
+        }
+    }
+
+    /** A friend's world answered our query. {@code status} is the raw serialized ServerStatus. */
+    record NewQueryResponse(UUID friend, byte[] status) implements WHS2CMessage {
+        public static final int ID = 16;
+        public static NewQueryResponse decode(DataInputStream dis) throws IOException {
+            return new NewQueryResponse(readUuid(dis), dis.readAllBytes());
+        }
+    }
+
     static WHS2CMessage decode(int id, DataInputStream dis) throws IOException {
         return switch (id) {
             case Error.ID -> Error.decode(dis);
@@ -131,6 +147,8 @@ public sealed interface WHS2CMessage {
             case ConnectionInfo.ID -> ConnectionInfo.decode(dis);
             case ConnectionNotFound.ID -> ConnectionNotFound.decode(dis);
             case Warning.ID -> Warning.decode(dis);
+            case QueryRequest.ID -> QueryRequest.decode(dis);
+            case NewQueryResponse.ID -> NewQueryResponse.decode(dis);
             default -> null; // unknown/unused message type: skip
         };
     }

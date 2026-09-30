@@ -50,6 +50,10 @@ public final class E4mcJoinUpgrade {
 
     private static void onDomainReceived(String domain) {
         Minecraft mc = Minecraft.getInstance();
+        // Host's own client, or already connected through this domain (direct e4mc join): nothing to upgrade.
+        if (mc.getSingleplayerServer() != null) return;
+        ServerData current = mc.getCurrentServer();
+        if (current != null && domain.equalsIgnoreCase(current.ip)) return;
         ServerAddress address;
         try {
             address = ServerAddress.parseString(domain);

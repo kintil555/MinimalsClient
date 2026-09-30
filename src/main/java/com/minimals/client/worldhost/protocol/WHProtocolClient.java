@@ -240,6 +240,14 @@ public final class WHProtocolClient implements AutoCloseable {
     }
 
     /** Sent by a joiner to ask the relay to open a proxy connection to connectionId's world. */
+    public void queryFriends(Collection<UUID> friends) {
+        enqueue(new WHC2SMessage.QueryRequest(friends));
+    }
+
+    public void queryResponse(long connectionId, byte[] status) {
+        enqueue(new WHC2SMessage.NewQueryResponse(connectionId, status));
+    }
+
     public void requestDirectJoin(long connectionId) {
         enqueue(new WHC2SMessage.RequestDirectJoin(connectionId));
     }

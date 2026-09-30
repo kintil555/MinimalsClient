@@ -16,7 +16,13 @@ import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.Unpooled;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.status.ClientboundStatusResponsePacket;
+import net.minecraft.network.protocol.status.ServerStatus;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -49,6 +55,13 @@ public final class WorldHostManager {
     /** Set by OpenWorldScreen right before publishServer(); consumed by onWorldPublished(). */
     private static Mode pendingMode = Mode.LAN;
     private static boolean multiplayerActive;
+
+    /** Marker put at the start of our world's MOTD when answering a friend's query; followed by the e4mc domain. */
+    private static final String DOMAIN_MARKER = "minimals-e4mc:";
+    /** Friend we sent a query to (waiting for their e4mc domain), or null. */
+    private static UUID pendingQueryFriend;
+    private static int pendingQueryTicks;
+    private static final int QUERY_TIMEOUT_TICKS = 200; // ~10s, then fall back to the proxy join
     /** True once e4mc has a domain (or the wait timed out), i.e. friends may be told about the world. */
     private static boolean announceReady;
     private static int announceTimeoutTicks;
@@ -121,6 +134,12 @@ public final class WorldHostManager {
         if (multiplayerActive && Minecraft.getInstance().getSingleplayerServer() == null) {
             onWorldUnpublished(); // left the world without an unpublish callback
         }
+        if (pendingQueryFriend != null && --pendingQueryTicks <= 0) {
+            UUID friend = pendingQueryFriend;
+            pendingQueryFriend = null;
+            LOGGER.info("[join] No e4mc domain from {} in time, falling back to proxy join", friend);
+            proxyJoin(friend);
+        }
         if (multiplayerActive && !announceReady && --announceTimeoutTicks <= 0) {
             announceReady = true; // e4mc gave no domain in time: friends still join via the relay proxy
             announceTo(WorldHostFriends.all());
@@ -151,6 +170,7 @@ public final class WorldHostManager {
                     // pointed at a dead relay session; drop it so a stale OnlineGame can't fire
                     // ConnectScreen against a proxy port the relay already tore down.
                     attemptingToJoin = null;
+                    pendingQueryFriend = null;
                 }
         );
         client.getConnectedFuture().thenRun(() -> {
@@ -267,6 +287,29 @@ public final class WorldHostManager {
                 if (hostBridge != null) hostBridge.onProxyDisconnect(disconnect.connectionId());
             }
 
+            case WHS2CMessage.QueryRequest query -> {
+                // A friend wants our address. Answer with our e4mc domain hidden in the MOTD.
+                String domain = E4mcDomainHolder.get();
+                LOGGER.info("[join] QueryRequest from {} cid={} (domain={})", query.friend(), query.connectionId(), domain);
+                if (!multiplayerActive || client == null || domain == null || domain.isEmpty()) break;
+                if (!WorldHostFriends.isFriend(query.friend())) break;
+                client.queryResponse(query.connectionId(), encodeStatus(DOMAIN_MARKER + domain));
+            }
+
+            case WHS2CMessage.NewQueryResponse response -> {
+                if (pendingQueryFriend == null || !pendingQueryFriend.equals(response.friend())) break;
+                String domain = decodeDomain(response.status());
+                LOGGER.info("[join] Query answer from {}: domain={}", response.friend(), domain);
+                if (domain == null) break; // not a Minimals host (or no domain yet): wait for timeout fallback
+                pendingQueryFriend = null;
+                Minecraft mc = Minecraft.getInstance();
+                ServerData serverData = new ServerData("Friend's world (e4mc)", domain, ServerData.Type.OTHER);
+                ConnectScreen.startConnecting(
+                        mc.gui.screen() != null ? mc.gui.screen() : new TitleScreen(),
+                        mc, ServerAddress.parseString(domain), serverData, false, null
+                );
+            }
+
             case WHS2CMessage.ConnectionNotFound notFound ->
                     LOGGER.warn("World Host: connection {} not found", notFound.connectionId());
 
@@ -280,14 +323,50 @@ public final class WorldHostManager {
      * the Minecraft connection.
      */
     public static void connectToFriend(UUID friendUuid) {
-        Long connectionId = ONLINE_FRIENDS.get(friendUuid);
-        if (connectionId == null) return;
+        if (!ONLINE_FRIENDS.containsKey(friendUuid)) return;
         if (client == null) {
             showToast("Can't join yet", "Still connecting to World Host, try again in a moment.");
             return;
         }
+        // Ask the host for its e4mc domain (the relay only forwards this one small message),
+        // then connect straight to e4mc. No game traffic goes through World Host.
+        pendingQueryFriend = friendUuid;
+        pendingQueryTicks = QUERY_TIMEOUT_TICKS;
+        LOGGER.info("[join] Querying {} for their e4mc domain", friendUuid);
+        client.queryFriends(List.of(friendUuid));
+    }
+
+    /** Old path, kept only as a fallback for hosts that don't answer with an e4mc domain. */
+    private static void proxyJoin(UUID friendUuid) {
+        Long connectionId = ONLINE_FRIENDS.get(friendUuid);
+        if (connectionId == null || client == null) return;
         attemptingToJoin = connectionId;
         client.requestDirectJoin(connectionId);
+    }
+
+    private static byte[] encodeStatus(String motd) {
+        ServerStatus status = new ServerStatus(Component.literal(motd), Optional.empty(), Optional.empty(), Optional.empty(), false);
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        ClientboundStatusResponsePacket.STREAM_CODEC.encode(buf, new ClientboundStatusResponsePacket(status));
+        byte[] bytes = new byte[buf.readableBytes()];
+        buf.readBytes(bytes);
+        return bytes;
+    }
+
+    /** Returns the e4mc domain hidden in a status' MOTD, or null if absent/invalid. */
+    private static String decodeDomain(byte[] statusBytes) {
+        try {
+            FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(statusBytes));
+            String motd = ClientboundStatusResponsePacket.STREAM_CODEC.decode(buf).status().description().getString();
+            if (!motd.startsWith(DOMAIN_MARKER)) return null;
+            String domain = motd.substring(DOMAIN_MARKER.length()).trim().toLowerCase(java.util.Locale.ROOT);
+            // Only a plain hostname: the value comes from another player, so keep it strict.
+            if (domain.isEmpty() || domain.length() > 253 || !domain.matches("[a-z0-9]([a-z0-9.-]*[a-z0-9])?")) return null;
+            return domain;
+        } catch (Exception e) {
+            LOGGER.warn("[join] Could not read query answer", e);
+            return null;
+        }
     }
 
     // --- helpers ---------------------------------------------------------

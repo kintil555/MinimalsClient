@@ -66,6 +66,15 @@ public sealed interface WHC2SMessage {
         }
     }
 
+    /** Host's answer to a friend's query: a serialized ServerStatus (same bytes vanilla's status response uses). */
+    record NewQueryResponse(long connectionId, byte[] status) implements WHC2SMessage {
+        public byte typeId() { return 11; }
+        public void encode(DataOutputStream dos) throws IOException {
+            dos.writeLong(connectionId);
+            dos.write(status);
+        }
+    }
+
     record ProxyC2SPacket(long connectionId, byte[] data) implements WHC2SMessage {
         public byte typeId() { return 8; }
         public void encode(DataOutputStream dos) throws IOException {
