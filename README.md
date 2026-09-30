@@ -1,6 +1,6 @@
 # Minimals — Lightweight client-side HUD (Fabric)
 
-Minimal, client-only Fabric mod scaffold for Minecraft 26.2 (Chaos Cubed).
+Minimal, client-only Fabric mod for Minecraft 26.2 (Chaos Cubed).
 
 
 ## CI
