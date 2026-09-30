@@ -219,6 +219,7 @@ public final class WorldHostManager {
             case WHS2CMessage.Warning warning -> LOGGER.warn("World Host server warning: {}", warning.message());
 
             case WHS2CMessage.OnlineGame game -> {
+                LOGGER.info("[join] OnlineGame {}:{} owner={} (attempting={})", game.host(), game.port(), game.ownerCid(), attemptingToJoin);
                 if (attemptingToJoin == null || game.ownerCid() != attemptingToJoin) break;
                 attemptingToJoin = null;
                 Minecraft mc = Minecraft.getInstance();
@@ -250,11 +251,13 @@ public final class WorldHostManager {
             case WHS2CMessage.RequestJoin reqJoin -> {
                 // A friend wants to join OUR world.
                 if (!multiplayerActive || client == null || !WorldHostFriends.isFriend(reqJoin.user())) break;
+                LOGGER.info("[join] RequestJoin from {} cid={} -> granting (e4mc domain={})", reqJoin.user(), reqJoin.connectionId(), E4mcDomainHolder.get());
                 client.joinGranted(reqJoin.connectionId());
                 showToast("Join request", WorldHostFriends.nameOf(reqJoin.user()) + " is joining your world.");
             }
 
             case WHS2CMessage.ProxyConnect connect -> {
+                LOGGER.info("[join] ProxyConnect cid={} from {} (bridge={})", connect.connectionId(), connect.remoteAddr(), hostBridge != null);
                 if (hostBridge != null) hostBridge.onProxyConnect(connect.connectionId(), connect.remoteAddr());
             }
             case WHS2CMessage.ProxyC2SPacket packet -> {
