@@ -16,7 +16,7 @@ public final class FlashbackBridge {
 
     public static final String MOD_ID = "flashback";
     /** Oldest Flashback this client was written against (keep in sync with fabric.mod.json "suggests"). */
-    public static final String MIN_VERSION = "0.43.0";
+    public static final String MIN_VERSION = "0.42.1";
 
     private static final String INSTALLED_VERSION = FabricLoader.getInstance().getModContainer(MOD_ID)
             .map(c -> c.getMetadata().getVersion().getFriendlyString()).orElse(null);
@@ -36,11 +36,11 @@ public final class FlashbackBridge {
     public static String unavailableReason() {
         if (!PRESENT) {
             return "Flashback mod is not installed (or was not detected).\n"
-                    + "Install Flashback " + MIN_VERSION + " or newer for Minecraft 26.2 to record replays.";
+                    + "Install Flashback " + MIN_VERSION + " or newer for Minecraft 26.1.2 to record replays.";
         }
         if (!COMPATIBLE) {
             return "Flashback " + INSTALLED_VERSION + " is not supported.\n"
-                    + "Update Flashback to " + MIN_VERSION + " or newer for Minecraft 26.2.";
+                    + "Update Flashback to " + MIN_VERSION + " or newer for Minecraft 26.1.2.";
         }
         return null;
     }
